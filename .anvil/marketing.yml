@@ -1,0 +1,10 @@
+# Language declaration for anvilco/marketing-site. Read at build time to drive
+# the Ruby SDK's marketing pages. Identity only: the Ruby SDK is not shipped, so
+# there is no `supported` flag (live requires supported + a complete page + a
+# slug, so this stays coming-soon), and no products/examples until the gem
+# implements them. When Ruby is public and usable, add `supported: true`,
+# `products`, and per-product `examples` here.
+languages:
+  - key: ruby
+    label: Ruby
+    slug: ruby
