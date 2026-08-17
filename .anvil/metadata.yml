@@ -1,3 +1,4 @@
 languages:
   - key: ruby
     label: Ruby
+    extension: rb
