@@ -21,8 +21,11 @@
 #   ANVIL_FORGE_EID        Optional. The webform (Forge) in a Workflow to submit to.
 #                          Defaults to the first one in your organization.
 #
-# Everything it creates is test data: the Etch packets are test packets, and the
-# Workflow submission is a test submission that is removed at the end.
+# Everything it creates is test data, and it removes all of it at the end: the
+# Etch packets are test packets with embedded signers, so no mail goes to
+# anyone, and the Workflow submission is a test submission. The PDF template
+# and the webform it uses are found in the organization, not created, so they
+# survive the run for the next one.
 
 $LOAD_PATH.unshift(File.expand_path("lib", __dir__))
 
@@ -117,6 +120,7 @@ document_group_eid = nil
 signer_eid = nil
 weld_data_eid = nil
 generated_pdf = nil
+created_packets = []
 
 runner.check "request_graphql" do
   response = client.request_graphql(query: <<~GRAPHQL)
@@ -257,6 +261,7 @@ runner.check "create_etch_packet (base64 upload)" do
   etch_packet_eid = packet.eid
   document_group_eid = packet.document_group&.eid
   signer_eid = packet.signers.first&.eid
+  created_packets << packet.eid
 
   packet.eid
 end
@@ -275,6 +280,7 @@ runner.check "create_etch_packet (multipart file upload)" do
     }
   )
 
+  created_packets << packet.eid
   "draft #{packet.eid}"
 end
 
@@ -292,6 +298,7 @@ runner.check "create_etch_packet (from a PDF template)" do
     }
   )
 
+  created_packets << packet.eid
   "draft #{packet.eid}"
 end
 
@@ -362,6 +369,21 @@ runner.check "remove_weld_data" do
   raise "The API said it was not removed" unless client.remove_weld_data(eid: weld_data_eid)
 
   "removed #{weld_data_eid}"
+end
+
+# Last, so the checks above still have their packets to read, sign and download
+runner.check "cleanup (removes the packets this run created)" do
+  skip_unless created_packets, "No packets were created to remove"
+
+  left = created_packets.reject do |eid|
+    client.request_graphql(
+      query: "mutation RemoveEtchPacket($eid: String!) { removeEtchPacket(eid: $eid) }",
+      variables: { eid: eid }
+    )["removeEtchPacket"]
+  end
+  raise "The API would not remove #{left.join(", ")}" unless left.empty?
+
+  "removed #{created_packets.length} packet(s)"
 end
 
 runner.check "error handling (a rejected request raises a typed error)" do
