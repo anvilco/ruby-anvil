@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  lint:
+    name: Rubocop
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - name: Lint
+        run: bundle exec rubocop --format github
+
+  test:
+    name: RSpec on Ruby ${{ matrix.ruby }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest Ruby the gemspec allows, through the newest
+        ruby: ["3.1", "3.2", "3.3", "3.4", "4.0"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: Test
+        run: bundle exec rspec --format progress
+
+  package:
+    name: Build the gem
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      # A gem that cannot be built cannot be published, so find out here
+      # rather than on the merge
+      - name: Build
+        run: gem build ruby-anvil.gemspec
+
+      - name: Install it into a scratch project and require it
+        run: |
+          gem install --local ruby-anvil-*.gem
+          cd "$(mktemp -d)"
+          ruby -e 'require "anvil"; Anvil::Client.new(api_key: "x"); puts "ruby-anvil #{Anvil::VERSION} installs and loads"'

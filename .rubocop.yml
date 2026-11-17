@@ -1,0 +1,58 @@
+AllCops:
+  TargetRubyVersion: 3.1
+  NewCops: enable
+  SuggestExtensions: false
+  Exclude:
+    - "vendor/**/*"
+    - "pkg/**/*"
+
+# The gem is named ruby-anvil and the library Anvil, so lib/ruby-anvil.rb is a
+# shim and the rest lives under lib/anvil/.
+Naming/FileName:
+  Exclude:
+    - "lib/ruby-anvil.rb"
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/StringLiteralsInInterpolation:
+  EnforcedStyle: double_quotes
+
+# The client mirrors the API's surface, and its request handling is a pipeline
+# that reads worse broken into pieces.
+Metrics/ClassLength:
+  Max: 400
+
+Metrics/ModuleLength:
+  Max: 200
+
+Metrics/MethodLength:
+  Max: 25
+
+Metrics/AbcSize:
+  Max: 25
+
+Metrics/CyclomaticComplexity:
+  Max: 12
+
+Metrics/PerceivedComplexity:
+  Max: 12
+
+Metrics/ParameterLists:
+  Max: 10
+  MaxOptionalParameters: 5
+
+Layout/LineLength:
+  Max: 120
+
+# Chained calls line up under their receiver rather than under the dot of the
+# line above, which keeps long WebMock and client chains readable.
+Layout/MultilineMethodCallIndentation:
+  EnforcedStyle: indented
+
+# The integration script is a list of checks, each one a block
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*.rb"
+    - "*.gemspec"
+    - "test-client.rb"
