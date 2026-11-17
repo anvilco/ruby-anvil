@@ -663,13 +663,16 @@ ANVIL_API_KEY=<your staging API key> ruby test-client.rb
 ```
 Testing ruby-anvil 0.1.0 against https://staging.useanvil.com
 
-  PASS  request_graphql (organization 24CaLWzZE7awEQlkfiaJ)
-  PASS  rate limiting (adopted from the response headers) (10 requests per 1000ms)
+  PASS  request_graphql (organization UESmQW9ZP6AKL9RJ7wlS)
+  PASS  rate limiting (adopted from the response headers) (4 requests per 1000ms)
   SKIP  OAuth access token (Bearer auth): Set ANVIL_ACCESS_TOKEN to check Bearer auth
-  PASS  generate_pdf (markdown) (15085 bytes)
+  PASS  request_rest (14252 bytes)
+  PASS  generate_pdf (markdown) (17875 bytes)
   ...
+  PASS  cleanup (removes the packets this run created) (removed 3 packet(s))
+  PASS  error handling (a rejected request raises a typed error) (ValidationError on HTTP 400)
 
-18 passed, 0 failed, 2 skipped
+20 passed, 0 failed, 1 skipped
 ```
 
 It exits non-zero if anything failed, so it can be run in a pipeline. Run it
@@ -685,9 +688,11 @@ Environment variables:
 | `ANVIL_PDF_TEMPLATE_ID` | no       | the PDF template to fill. Defaults to the first one with example data       |
 | `ANVIL_FORGE_EID`       | no       | the webform to submit to. Defaults to the first one in your organization    |
 
-Everything it creates is test data: the Etch packets are test packets, its
-signers are embedded (so no email is sent to anyone), and the Workflow
-submission it makes is removed at the end.
+Everything it creates is test data, and it removes all of it at the end: the
+Etch packets are test packets whose signers are embedded, so no email is sent
+to anyone, and the Workflow submission is a test submission. The PDF template
+and the webform it uses are found in your organization rather than created, so
+they survive the run.
 
 `bundle exec rake integration` runs the same script.
 

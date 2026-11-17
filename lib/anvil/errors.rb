@@ -21,10 +21,8 @@ module Anvil
     end
   end
 
-  # A single field-level problem inside an {ErrorDetail}, as returned by the
-  # REST API's validation errors:
-  #
-  #   { "name": "ValidationError", "fields": [{ "message": "Required", "property": "data" }] }
+  # A single field-level problem inside an {ErrorDetail}: which field the API
+  # rejected, and why.
   class ErrorField
     # @return [String, nil]
     attr_reader :message
