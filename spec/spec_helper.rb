@@ -9,6 +9,7 @@ SimpleCov.start do
 end
 
 require "anvil"
+require "timeout"
 require "webmock/rspec"
 
 RSpec.configure do |config|
@@ -20,13 +21,27 @@ RSpec.configure do |config|
   config.order = :random
   Kernel.srand config.seed
 
+  # The rate limiter makes callers wait, so a bug in it deadlocks rather than
+  # fails. Nothing here legitimately takes a second, so bound every example and
+  # let a deadlock surface as a failure with a backtrace.
+  config.around do |example|
+    Timeout.timeout(10) { example.run }
+  rescue Timeout::Error
+    raise "Example timed out after 10s, which usually means a deadlock in the rate limiter"
+  end
+
   config.include(Module.new do
-    # A client whose rate limiter is effectively open, so a spec that makes
-    # several requests does not wait between them. The limiter's own behavior
-    # is covered in rate_limiter_spec.rb and rate_limiting_spec.rb.
+    # A client whose rate limiter is its own and effectively open, so a spec
+    # that makes several requests does not wait between them and nothing leaks
+    # into the next spec. Sharing is the production default and is covered in
+    # rate_limiting_spec.rb. The limiter itself is covered in rate_limiter_spec.rb.
     def build_client(**overrides)
       Anvil::Client.new(
-        api_key: "abc123", request_limit: 1000, request_limit_ms: 1, **overrides
+        api_key: "abc123",
+        request_limit: 1000,
+        request_limit_ms: 1,
+        share_rate_limiter: false,
+        **overrides
       )
     end
 

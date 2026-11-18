@@ -56,3 +56,13 @@ Metrics/BlockLength:
     - "spec/**/*.rb"
     - "*.gemspec"
     - "test-client.rb"
+
+# The examples are copy-pasteable snippets for someone learning the API, so
+# they carry no boilerplate a reader would have to look past.
+Style/FrozenStringLiteralComment:
+  Exclude:
+    - "examples/*.rb"
+
+Style/MutableConstant:
+  Exclude:
+    - "examples/*.rb"

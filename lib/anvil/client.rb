@@ -31,15 +31,19 @@ module Anvil
     DEFAULT_REQUEST_LIMIT = 1
     DEFAULT_REQUEST_LIMIT_MS = 1000
 
-    # How many times a 429 is retried before {RateLimitError} is raised.
-    DEFAULT_MAX_RETRIES = 3
+    # How many times a request the API could not answer is retried. Zero turns
+    # it off. A 429 does not count against this: the limiter retries it for as
+    # long as the API keeps asking.
+    DEFAULT_MAX_RETRIES = 5
 
-    # Added to every retry delay, so a retry lands just after the window the
-    # API named rather than exactly on it.
-    RETRY_BUFFER_MS = 50
+    # The statuses worth sending again: the API was reached but could not answer.
+    RETRY_STATUSES = [500, 502, 503, 504].freeze
 
-    DEFAULT_OPEN_TIMEOUT = 30
-    DEFAULT_READ_TIMEOUT = 120
+    # The first retry waits this long, each one after it twice as long.
+    RETRY_BACKOFF_MS = 100
+
+    # Seconds to wait for a connection, and for a response.
+    DEFAULT_TIMEOUT = 300
 
     # The shapes a response body can be asked for.
     DATA_TYPES = %i[string io stream json].freeze
@@ -68,44 +72,42 @@ module Anvil
     # @return [Integer] how many times a 429 is retried
     attr_reader :max_retries
 
-    # @param api_key [String] an API key from your Anvil organization settings
+    # @param api_key [String] an API key from your Anvil organization settings.
+    #   Defaults to the `ANVIL_API_KEY` environment variable
     # @param access_token [String] an OAuth access token, instead of an API key
     # @param base_url [String] the Anvil environment to talk to
     # @param user_agent [String] overrides the User-Agent header
     # @param request_limit [Integer] requests allowed per interval before the
     #   API's own limit is known
     # @param request_limit_ms [Integer] that interval, in milliseconds
-    # @param max_retries [Integer] how many times to retry a 429
-    # @param open_timeout [Numeric] seconds to wait for a connection
-    # @param read_timeout [Numeric] seconds to wait for a response
+    # @param max_retries [Integer] how many times to retry a request the API
+    #   could not answer. Zero turns it off; a 429 is always retried
+    # @param timeout [Numeric] seconds to wait for a connection, and for a response
+    # @param share_rate_limiter [Boolean] share one limiter per process with
+    #   every other client for the same environment and credentials
+    # @param rate_limiter [RateLimiter] a limiter of your own, instead
     # @raise [ConfigurationError] when neither an API key nor an access token
     #   was given
     def initialize(
-      api_key: nil,
+      api_key: ENV.fetch("ANVIL_API_KEY", nil),
       access_token: nil,
       base_url: DEFAULT_BASE_URL,
       user_agent: nil,
       request_limit: DEFAULT_REQUEST_LIMIT,
       request_limit_ms: DEFAULT_REQUEST_LIMIT_MS,
       max_retries: DEFAULT_MAX_RETRIES,
-      open_timeout: DEFAULT_OPEN_TIMEOUT,
-      read_timeout: DEFAULT_READ_TIMEOUT
+      timeout: DEFAULT_TIMEOUT,
+      share_rate_limiter: true,
+      rate_limiter: nil
     )
-      raise ConfigurationError, "An api_key or an access_token is required" if blank?(api_key) && blank?(access_token)
-
-      @auth_header = build_auth_header(api_key: api_key, access_token: access_token)
+      @auth_header = Auth.build_header(api_key: api_key, access_token: access_token)
       @base_url = (base_url || DEFAULT_BASE_URL).to_s.sub(%r{/+\z}, "")
       raise ConfigurationError, "base_url must be an http(s) URL" unless @base_url.match?(%r{\Ahttps?://})
 
-      @user_agent = user_agent || "Anvil API Client/#{Anvil::VERSION} ruby/#{RUBY_VERSION}"
+      @user_agent = user_agent || "ruby-anvil/#{Anvil::VERSION}"
       @max_retries = max_retries.to_i
-      @open_timeout = open_timeout
-      @read_timeout = read_timeout
-
-      @limiter_mutex = Mutex.new
-      @limiter_set_from_response = false
-      @rate_limiter = nil
-      set_rate_limiter(tokens: request_limit, interval_ms: request_limit_ms)
+      @timeout = timeout
+      @rate_limiter = rate_limiter || build_rate_limiter(share_rate_limiter, request_limit, request_limit_ms)
     end
 
     # Fills a PDF template with your data and returns the filled PDF.
@@ -219,6 +221,19 @@ module Anvil
       query = GraphQL::Queries.etch_packet(*[response_query].compact)
       response = request_graphql(query: query, variables: variables)
       Types::EtchPacket.from_h(response["etchPacket"])
+    end
+
+    # Reads whoever the API key or access token belongs to.
+    #
+    #   user = client.get_current_user
+    #   user.email
+    #   user.organizations.map(&:slug)
+    #
+    # @param response_query [String] the fields to select
+    # @return [Types::User]
+    def get_current_user(response_query: nil)
+      response = request_graphql(query: GraphQL::Queries.current_user(*[response_query].compact))
+      Types::User.from_h(response["currentUser"])
     end
 
     # Generates a signing URL for one signer of an existing packet. The signer
@@ -347,29 +362,46 @@ module Anvil
       end
     end
 
-    # Runs the request under the rate limiter, retrying a 429 for as long as
-    # `max_retries` allows.
+    # Runs the request under the rate limiter, which retries a 429 for as long
+    # as the API keeps asking, and retries here what the API could not answer.
     def perform(uri, request, data_type:, to: nil, &block)
       attempt = 0
 
       begin
-        rate_limiter.remove_token
-        send_request(uri, request, data_type: data_type, to: to, &block)
-      rescue RateLimitError => e
+        rate_limiter.run do
+          rewind_body(request)
+          send_request(uri, request, data_type: data_type, to: to, &block)
+        end
+      rescue ServerError, ConnectionError => e
         attempt += 1
-        raise if attempt > max_retries
+        raise if attempt > max_retries || !retryable?(e)
 
-        rewind_body(request)
-        sleep(retry_delay(e.retry_after))
+        sleep(retry_delay(e, attempt))
         retry
       end
+    end
+
+    # A 5xx the API named as temporary, or a connection that never got there.
+    # A timeout is not retried: the request may well have been acted on.
+    def retryable?(error)
+      return RETRY_STATUSES.include?(error.status_code) if error.is_a?(ServerError)
+
+      !error.cause_error.is_a?(Timeout::Error)
+    end
+
+    # The delay the response asked for, or exponential backoff.
+    def retry_delay(error, attempt)
+      asked = error.is_a?(ServerError) ? error.headers["retry-after"] : nil
+      return RateLimiter.retry_delay_seconds(asked) if asked
+
+      (RETRY_BACKOFF_MS * (2**(attempt - 1))) / 1000.0
     end
 
     def send_request(uri, request, data_type:, to: nil, &block)
       http = Net::HTTP.new(uri.hostname, uri.port)
       http.use_ssl = uri.scheme == "https"
-      http.open_timeout = @open_timeout
-      http.read_timeout = @read_timeout
+      http.open_timeout = @timeout
+      http.read_timeout = @timeout
 
       # Net::HTTP#request hands back the raw response, not the block's value,
       # so the handled result comes out through this
@@ -388,7 +420,7 @@ module Anvil
     def handle_response(response, data_type:, to: nil, &block)
       status_code = response.code.to_i
       headers = normalize_headers(response)
-      adopt_rate_limit(headers)
+      rate_limiter.update_from_headers(headers)
 
       raise_rate_limited(response, status_code, headers) if status_code == 429
 
@@ -405,7 +437,10 @@ module Anvil
     end
 
     def check_for_errors(response, status_code, headers, raw, json)
-      raise_response_error(status_code, json, headers, response.message) if Errors.looks_like_json_error?(json)
+      # GraphQL reports failure in a 200, so its errors array is checked whatever
+      # the status. A 2xx carrying only `message` or `name` is NOT an error: node
+      # treats it as one, and the SDK conventions call that a legacy divergence.
+      raise_response_error(status_code, json, headers, response.message) if graphql_errors?(json)
       return if status_code < 300
 
       raise_response_error(
@@ -457,13 +492,17 @@ module Anvil
       )
     end
 
+    def graphql_errors?(json)
+      json.is_a?(Hash) && json["errors"].is_a?(Array) && !json["errors"].empty?
+    end
+
     def raise_response_error(status_code, json, headers, status_text, body: nil)
       errors = Errors.normalize(json, status_text: blank?(status_text) ? "Unknown Error" : status_text)
 
       error_class =
         if status_code >= 300
           Errors.error_class_for(status_code)
-        elsif json.is_a?(Hash) && json["errors"]
+        elsif graphql_errors?(json)
           # GraphQL answers 200 even when the query failed
           GraphQLError
         else
@@ -532,55 +571,15 @@ module Anvil
       named.compact.merge(given.to_h)
     end
 
-    def build_auth_header(api_key:, access_token:)
-      return "Bearer #{base64(access_token.to_s)}" unless blank?(access_token)
+    def build_rate_limiter(shared, limit, interval_ms)
+      return RateLimiter.new(limit: limit, interval_ms: interval_ms) unless shared
 
-      "Basic #{base64("#{api_key}:")}"
-    end
-
-    # Strict base64, no line breaks, matching node-anvil's encoding.
-    def base64(value)
-      [value].pack("m0")
-    end
-
-    # Replaces the limiter with one built from the API's own limit, once.
-    def adopt_rate_limit(headers)
-      return if @limiter_set_from_response
-
-      @limiter_mutex.synchronize do
-        return if @limiter_set_from_response
-
-        tokens = headers["x-ratelimit-limit"].to_i
-        interval_ms = headers["x-ratelimit-interval-ms"].to_i
-        return unless tokens.positive? && interval_ms.positive?
-
-        set_rate_limiter(tokens: tokens, interval_ms: interval_ms)
-        @limiter_set_from_response = true
-      end
-    end
-
-    # Swaps in a differently sized bucket, carrying over the tokens already
-    # spent so resizing never hands out a free burst.
-    def set_rate_limiter(tokens:, interval_ms:)
-      tokens = tokens.to_i
-      interval_ms = interval_ms.to_i
-      return unless tokens.positive? && interval_ms.positive?
-      return if rate_limiter && rate_limiter.tokens == tokens && rate_limiter.interval_ms == interval_ms
-
-      limiter = RateLimiter.new(tokens: tokens, interval_ms: interval_ms)
-
-      if rate_limiter
-        in_use = [rate_limiter.tokens_in_use, tokens].min
-        limiter.try_remove_tokens(in_use) if in_use.positive?
-      end
-
-      @rate_limiter = limiter
-    end
-
-    # Matches node-anvil: the seconds the API asked for, rounded to whole
-    # milliseconds, plus the buffer.
-    def retry_delay(retry_after)
-      ((retry_after.to_f.abs * 1000).round + RETRY_BUFFER_MS) / 1000.0
+      RateLimiter.shared(
+        base_url: @base_url,
+        auth_header: @auth_header,
+        limit: limit,
+        interval_ms: interval_ms
+      )
     end
 
     def normalize_headers(response)

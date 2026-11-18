@@ -74,6 +74,10 @@ def skip_unless(value, reason)
   value
 end
 
+# Anvil fetches a URL upload itself, so it has to be publicly reachable. This is
+# node-anvil's copy of the test PDF.
+PUBLIC_PDF_URL = "https://raw.githubusercontent.com/anvilco/node-anvil/main/test/assets/dummy.pdf"
+
 # A signature box to place on an uploaded PDF, so the packet has something to sign
 def signature_field
   {
@@ -146,9 +150,16 @@ runner.check "request_graphql" do
   "organization #{organization["eid"]}"
 end
 
-runner.check "rate limiting (adopted from the response headers)" do
+runner.check "rate limiting (a burst past the limit surfaces no 429)" do
   limiter = client.rate_limiter
-  "#{limiter.tokens} requests per #{limiter.interval_ms}ms"
+  # One more than the organization is allowed, so the limiter has to hold at
+  # least one of them back. A 429 reaching us would raise.
+  burst = limiter.limit + 1
+  started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  burst.times { client.get_current_user(response_query: "{ eid }") }
+  spent = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+  "#{burst} requests at #{limiter.limit} per #{limiter.interval_ms}ms in #{spent.round(1)}s"
 end
 
 runner.check "OAuth access token (Bearer auth)" do
@@ -158,6 +169,13 @@ runner.check "OAuth access token (Bearer auth)" do
   response = oauth.request_graphql(query: "query CurrentUser { currentUser { eid } }")
 
   "current user #{response.dig("currentUser", "eid")}"
+end
+
+runner.check "get_current_user" do
+  user = client.get_current_user
+  raise "Expected a user eid" if user.eid.nil?
+
+  "#{user.eid}, #{user.organizations.length} organization(s)"
 end
 
 runner.check "request_rest" do
@@ -276,6 +294,27 @@ runner.check "create_etch_packet (multipart file upload)" do
       isDraft: true,
       isTest: true,
       files: [{ id: "testFile", title: "Uploaded File", file: upload, fields: [signature_field] }],
+      signers: [embedded_signer]
+    }
+  )
+
+  created_packets << packet.eid
+  "draft #{packet.eid}"
+end
+
+runner.check "create_etch_packet (URL upload)" do
+  packet = client.create_etch_packet(
+    variables: {
+      name: "ruby-anvil test client (URL upload)",
+      isDraft: true,
+      isTest: true,
+      # Anvil fetches this itself, so it has to be publicly reachable
+      files: [{
+        id: "testFile",
+        title: "URL File",
+        file: { url: PUBLIC_PDF_URL, filename: "url-upload.pdf" },
+        fields: [signature_field]
+      }],
       signers: [embedded_signer]
     }
   )

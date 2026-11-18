@@ -7,92 +7,169 @@ RSpec.describe Anvil::RateLimiter do
     Process.clock_gettime(Process::CLOCK_MONOTONIC, :float_millisecond) - started
   end
 
-  it "starts full" do
-    limiter = described_class.new(tokens: 5, interval_ms: 1000)
+  describe "the window" do
+    it "lets the limit through without waiting" do
+      limiter = described_class.new(limit: 3, interval_ms: 10_000)
 
-    expect(limiter.tokens).to eq(5)
-    expect(limiter.interval_ms).to eq(1000)
-    expect(limiter.tokens_remaining).to be_within(0.01).of(5)
-  end
+      spent = elapsed_ms { 3.times { limiter.run { :ok } } }
 
-  it "hands out its tokens without waiting" do
-    limiter = described_class.new(tokens: 3, interval_ms: 10_000)
-
-    spent = elapsed_ms { 3.times { limiter.remove_token } }
-
-    expect(spent).to be < 50
-    expect(limiter.tokens_remaining).to be < 1
-  end
-
-  it "makes the caller wait once the tokens are gone" do
-    limiter = described_class.new(tokens: 2, interval_ms: 100)
-
-    spent = elapsed_ms { 3.times { limiter.remove_token } }
-
-    # The third token needs half an interval to refill
-    expect(spent).to be >= 40
-  end
-
-  it "refills over the interval" do
-    limiter = described_class.new(tokens: 10, interval_ms: 100)
-    10.times { limiter.remove_token }
-
-    sleep(0.05)
-
-    expect(limiter.tokens_remaining).to be_within(2).of(5)
-  end
-
-  it "never refills past its capacity" do
-    limiter = described_class.new(tokens: 2, interval_ms: 10)
-
-    sleep(0.05)
-
-    expect(limiter.tokens_remaining).to eq(2.0)
-  end
-
-  describe "#try_remove_tokens" do
-    it "takes the tokens when they are all there" do
-      limiter = described_class.new(tokens: 5, interval_ms: 10_000)
-
-      expect(limiter.try_remove_tokens(3)).to be(true)
-      expect(limiter.tokens_remaining).to be_within(0.01).of(2)
+      expect(spent).to be < 50
+      expect(limiter.in_use).to eq(3)
     end
 
-    it "takes nothing when they are not" do
-      limiter = described_class.new(tokens: 5, interval_ms: 10_000)
+    it "makes the next caller wait for the oldest response to leave the window" do
+      limiter = described_class.new(limit: 2, interval_ms: 100)
+      2.times { limiter.run { :ok } }
 
-      expect(limiter.try_remove_tokens(6)).to be(false)
-      expect(limiter.tokens_remaining).to be_within(0.01).of(5)
+      spent = elapsed_ms { limiter.run { :ok } }
+
+      expect(spent).to be >= 50
+    end
+
+    it "stops counting a request once its interval has passed" do
+      limiter = described_class.new(limit: 5, interval_ms: 50)
+      5.times { limiter.run { :ok } }
+      expect(limiter.in_use).to eq(5)
+
+      sleep(0.15)
+
+      expect(limiter.in_use).to eq(0)
+    end
+
+    it "counts a request that is still out, not just finished ones" do
+      limiter = described_class.new(limit: 2, interval_ms: 10_000)
+      seen = nil
+
+      limiter.run { seen = limiter.in_use }
+
+      expect(seen).to eq(1)
+    end
+
+    it "gives the slot back when the request raises" do
+      limiter = described_class.new(limit: 1, interval_ms: 10_000)
+
+      expect { limiter.run { raise Anvil::ConnectionError, "boom" } }.to raise_error(Anvil::ConnectionError)
+      expect(limiter.in_use).to eq(1)
+    end
+
+    it "is safe to share between threads" do
+      limiter = described_class.new(limit: 20, interval_ms: 50)
+      counter = Queue.new
+
+      threads = Array.new(4) { Thread.new { 5.times { limiter.run { counter << 1 } } } }
+      threads.each(&:join)
+
+      expect(counter.size).to eq(20)
     end
   end
 
-  describe "#tokens_in_use" do
-    it "counts the tokens spent out of the bucket" do
-      limiter = described_class.new(tokens: 5, interval_ms: 10_000)
-      2.times { limiter.remove_token }
+  describe "a 429" do
+    it "is retried for as long as the API keeps asking" do
+      limiter = described_class.new(limit: 100, interval_ms: 1)
+      allow(limiter).to receive(:sleep)
+      refusals = 4
+      attempts = 0
 
-      expect(limiter.tokens_in_use).to eq(2)
-    end
+      result = limiter.run do
+        attempts += 1
+        raise Anvil::RateLimitError.new("limited", retry_after: 0.2, status_code: 429) if attempts <= refusals
 
-    it "is zero for an untouched bucket" do
-      expect(described_class.new(tokens: 5, interval_ms: 10_000).tokens_in_use).to eq(0)
+        :finally
+      end
+
+      expect(result).to eq(:finally)
+      expect(attempts).to eq(refusals + 1)
+      expect(limiter).to have_received(:sleep).with(0.25).exactly(refusals).times
     end
   end
 
-  it "is safe to share between threads" do
-    limiter = described_class.new(tokens: 20, interval_ms: 50)
+  describe ".retry_delay_seconds" do
+    it "adds the buffer to what the API asked for" do
+      expect(described_class.retry_delay_seconds("0.2")).to eq(0.25)
+    end
 
-    threads = Array.new(4) { Thread.new { 5.times { limiter.remove_token } } }
-    threads.each(&:join)
+    it "waits a second when the API named no delay" do
+      expect(described_class.retry_delay_seconds(nil)).to eq(1.05)
+    end
 
-    expect(limiter.tokens_remaining).to be < 20
+    it "waits a second when the delay is unreadable, such as an HTTP date" do
+      expect(described_class.retry_delay_seconds("Wed, 21 Oct 2026 07:28:00 GMT")).to eq(1.05)
+    end
+
+    it "takes a negative delay as its own magnitude" do
+      expect(described_class.retry_delay_seconds("-2")).to eq(2.05)
+    end
+
+    it "caps the wait at a minute, however long the API asks for" do
+      expect(described_class.retry_delay_seconds("9999")).to eq(60.05)
+    end
   end
 
-  it "refuses a bucket that could never hand out a token" do
-    expect do
-      described_class.new(tokens: 0, interval_ms: 1000)
-    end.to raise_error(ArgumentError, /tokens must be positive/)
-    expect { described_class.new(tokens: 1, interval_ms: 0) }
-      .to raise_error(ArgumentError, /interval_ms must be positive/)
+  describe "#set_limits" do
+    let(:limiter) { described_class.new(limit: 1, interval_ms: 1000) }
+
+    it "replaces the limit and says it changed" do
+      expect(limiter.set_limits(42, 4200)).to be(true)
+      expect(limiter.limit).to eq(42)
+      expect(limiter.interval_ms).to eq(4200)
+    end
+
+    it "does nothing when the limit is the same" do
+      expect(limiter.set_limits(1, 1000)).to be(false)
+    end
+
+    it "ignores a limit that could never hand out a request" do
+      expect(limiter.set_limits(0, 1000)).to be(false)
+      expect(limiter.set_limits("not a number", 1000)).to be(false)
+      expect(limiter.set_limits(5, nil)).to be(false)
+      expect(limiter.limit).to eq(1)
+    end
+  end
+
+  describe "#update_from_headers" do
+    let(:limiter) { described_class.new(limit: 1, interval_ms: 1000) }
+
+    it "adopts the organization's real limit" do
+      limiter.update_from_headers("x-ratelimit-limit" => "42", "x-ratelimit-interval-ms" => "4200")
+
+      expect(limiter.limit).to eq(42)
+      expect(limiter.interval_ms).to eq(4200)
+    end
+
+    it "only does it once, however the later responses are headed" do
+      limiter.update_from_headers("x-ratelimit-limit" => "42", "x-ratelimit-interval-ms" => "4200")
+      limiter.update_from_headers("x-ratelimit-limit" => "7", "x-ratelimit-interval-ms" => "1000")
+
+      expect(limiter.limit).to eq(42)
+    end
+
+    it "keeps what it has when the headers say nothing usable" do
+      limiter.update_from_headers("x-ratelimit-limit" => "not a number", "x-ratelimit-interval-ms" => "0")
+
+      expect(limiter.limit).to eq(1)
+    end
+  end
+
+  describe ".shared" do
+    it "hands the same limiter to the same environment and credentials" do
+      one = described_class.shared(base_url: "https://staging.useanvil.com", auth_header: "Basic abc")
+      two = described_class.shared(base_url: "https://staging.useanvil.com", auth_header: "Basic abc")
+
+      expect(one).to be(two)
+    end
+
+    it "keeps different credentials apart" do
+      one = described_class.shared(base_url: "https://staging.useanvil.com", auth_header: "Basic abc")
+      two = described_class.shared(base_url: "https://staging.useanvil.com", auth_header: "Basic zzz")
+
+      expect(one).not_to be(two)
+    end
+
+    it "keeps different environments apart" do
+      one = described_class.shared(base_url: "https://staging.useanvil.com", auth_header: "Basic abc")
+      two = described_class.shared(base_url: "https://app.useanvil.com", auth_header: "Basic abc")
+
+      expect(one).not_to be(two)
+    end
   end
 end

@@ -42,6 +42,20 @@ module Anvil
         }
       GRAPHQL
 
+      CURRENT_USER = <<~GRAPHQL.strip
+        {
+          eid
+          name
+          email
+          role
+          organizations {
+            eid
+            name
+            slug
+          }
+        }
+      GRAPHQL
+
       ETCH_PACKET = <<~GRAPHQL.strip
         {
           id
@@ -227,6 +241,16 @@ module Anvil
     # The queries with a method of their own on {Client}.
     module Queries
       module_function
+
+      # @param response_query [String] the fields to select on the user
+      # @return [String]
+      def current_user(response_query = DefaultResponseQueries::CURRENT_USER)
+        <<~GRAPHQL
+          query CurrentUser {
+            currentUser #{response_query}
+          }
+        GRAPHQL
+      end
 
       # @param response_query [String] the fields to select on the packet
       # @return [String]

@@ -271,6 +271,48 @@ RSpec.describe "Anvil::Client API methods" do
     end
   end
 
+  describe "#get_current_user" do
+    let(:user) do
+      {
+        "eid" => "user123",
+        "name" => "Sally Jones",
+        "email" => "sally@example.test",
+        "role" => "owner",
+        "organizations" => [{ "eid" => "org123", "name" => "Acme", "slug" => "acme" }]
+      }
+    end
+
+    it "sends the CurrentUser query and returns a typed user" do
+      stub_graphql("currentUser" => user)
+
+      result = client.get_current_user
+
+      expect(result).to be_a(Anvil::Types::User)
+      expect(result.email).to eq("sally@example.test")
+      expect(result.organizations.map(&:slug)).to eq(["acme"])
+      expect(graphql_request["query"]).to include("query CurrentUser {")
+    end
+
+    it "selects the same default fields node-anvil does" do
+      stub_graphql("currentUser" => user)
+
+      client.get_current_user
+
+      %w[eid name email role organizations slug].each do |field|
+        expect(graphql_request["query"]).to include(field)
+      end
+    end
+
+    it "takes a custom response query" do
+      stub_graphql("currentUser" => { "eid" => "user123" })
+
+      client.get_current_user(response_query: "{ eid }")
+
+      expect(graphql_request["query"]).to include("currentUser { eid }")
+      expect(graphql_request["query"]).not_to include("organizations")
+    end
+  end
+
   describe "#generate_etch_sign_url" do
     it "sends the GenerateEtchSignURL mutation and returns the URL" do
       stub_graphql("generateEtchSignURL" => "https://app.useanvil.com/etch/sign/abc")

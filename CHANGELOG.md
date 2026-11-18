@@ -33,3 +33,25 @@ The first release: the Anvil API in Ruby, with the same coverage as the
   `Anvil.prepare_graphql_file`.
 - `:string`, `:io`, `:stream` and `:json` response types, so a large PDF or zip
   never has to be held in memory whole.
+- `get_current_user`, reading whoever the credentials belong to.
+- An `ANVIL_API_KEY` environment variable fallback, so a client built with no
+  arguments works.
+- Retries for the responses the API could not give: 500, 502, 503 and 504, and
+  connection errors, backing off 100ms and doubling, or honoring a `Retry-After`.
+  A timeout is not retried, since the request may already have been acted on.
+- `examples/`, and a `CONTRIBUTING.md` covering developing, the test client, the
+  types, versioning and publishing.
+
+### Notes
+
+The client follows the SDK conventions the other Anvil clients are held to, so a
+few behaviors match python-anvil and dotnet-anvil rather than node-anvil:
+
+- An OAuth access token that is a JWT is sent verbatim, as the API wants. Only
+  a non-JWT token is base64 encoded.
+- The rate limiter is a sliding window shared per process, keyed by the
+  environment and the credentials, counting requests in flight as well as
+  finished. A 429 is retried for as long as the API keeps asking, waiting the
+  `Retry-After` it named capped at a minute.
+- A 2xx whose body carries only a `name` or a `message` is not an error.
+  node-anvil treats it as one; that is a known divergence.

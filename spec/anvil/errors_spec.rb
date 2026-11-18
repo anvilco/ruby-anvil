@@ -158,7 +158,9 @@ RSpec.describe "Anvil error handling" do
         .to raise_error(Anvil::ServerError)
     end
 
-    it "raises on a JSON error body even when the status says 200" do
+    # node-anvil counts this as an error; python-anvil and dotnet-anvil do not,
+    # and the SDK conventions call node's the legacy divergence
+    it "does not raise on a 2xx body carrying only a name and a message" do
       stub_request(:post, "https://app.useanvil.com/api/v1/generate-pdf")
         .to_return(
           status: 200,
@@ -166,8 +168,17 @@ RSpec.describe "Anvil error handling" do
           headers: json_headers
         )
 
-      expect { client.generate_pdf(type: "html", data: {}) }
-        .to raise_error(Anvil::ResponseError, /PDF did not generate properly/)
+      response = client.generate_pdf(type: "html", data: {})
+
+      expect(response.status_code).to eq(200)
+      expect(JSON.parse(response.data)["name"]).to eq("AssertionError")
+    end
+
+    it "still raises when a 2xx carries a GraphQL errors array" do
+      stub_request(:post, "https://app.useanvil.com/api/v1/generate-pdf")
+        .to_return(status: 200, body: '{"errors":[{"message":"Nope"}]}', headers: json_headers)
+
+      expect { client.generate_pdf(type: "html", data: {}) }.to raise_error(Anvil::GraphQLError, /Nope/)
     end
   end
 

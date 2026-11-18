@@ -24,6 +24,7 @@ no runtime dependencies to your app.
   - [generate_pdf](#generate_pdfpayload-options)
   - [create_etch_packet](#create_etch_packetvariables-response_query-mutation)
   - [get_etch_packet](#get_etch_packeteid-response_query)
+  - [get_current_user](#get_current_userresponse_query)
   - [generate_etch_sign_url](#generate_etch_sign_urlsigner_eid-client_user_id)
   - [download_documents](#download_documentsdocument_group_eid-options)
   - [forge_submit](#forge_submitvariables-response_query-mutation)
@@ -34,7 +35,7 @@ no runtime dependencies to your app.
 - [File uploads](#file-uploads)
 - [Response types](#response-types)
 - [Errors](#errors)
-- [Rate limits](#rate-limits)
+- [Rate limits and retries](#rate-limits-and-retries)
 - [Typed payloads and responses](#typed-payloads-and-responses)
 - [Development](#development)
 - [Integration test](#integration-test)
@@ -101,14 +102,26 @@ client = Anvil::Client.new(access_token: "an-oauth-access-token")
 Both are base64 encoded the same way node-anvil encodes them, so a key that
 works in one client works in the other:
 
-| Credential     | Header                                       |
-| -------------- | -------------------------------------------- |
-| `api_key`      | `Basic ` + base64 of `"#{api_key}:"`         |
-| `access_token` | `Bearer ` + base64 of the token              |
+| Credential | Header |
+| --- | --- |
+| `api_key` | `Basic ` + base64 of `"#{api_key}:"` |
+| `access_token`, a JWT | `Bearer ` + the token, unencoded |
+| `access_token`, anything else | `Bearer ` + base64 of the token |
 
 Note the trailing colon on the API key: it is a username with an empty
 password, in the HTTP Basic style. The client handles this; you pass the raw
 key.
+
+Anvil's OAuth access tokens are JWTs, which the API wants verbatim. Any other
+token is base64 encoded, which the API still accepts. The client works out
+which it has, so you pass the token you were given either way.
+
+`api_key` defaults to the **`ANVIL_API_KEY`** environment variable, so a client
+with no arguments works when that is set:
+
+```ruby
+client = Anvil::Client.new
+```
 
 Find your API key in your organization's settings in the
 [Anvil dashboard](https://app.useanvil.com). See the
@@ -131,12 +144,16 @@ client = Anvil::Client.new(
   request_limit: 1,
   request_limit_ms: 1000,
 
-  # How many times a 429 is retried before Anvil::RateLimitError is raised
-  max_retries: 3,
+  # How many times to retry a request the API could not answer. Zero turns it
+  # off. A 429 is always retried, for as long as the API keeps asking
+  max_retries: 5,
 
   # Seconds to wait for a connection, and for a response
-  open_timeout: 30,
-  read_timeout: 120
+  timeout: 300,
+
+  # Share one limiter per process with every other client for the same
+  # environment and credentials
+  share_rate_limiter: true
 )
 ```
 
@@ -312,6 +329,20 @@ packet.signers.map { |signer| [signer.email, signer.status] }
 
 Pass `variables:` instead of `eid:` if you would rather give the query's
 variables whole.
+
+### `get_current_user(response_query:)`
+
+Reads whoever the API key or access token belongs to.
+
+```ruby
+user = client.get_current_user
+
+user.eid
+user.email
+user.organizations.map(&:slug)
+```
+
+Returns an `Anvil::Types::User`.
 
 ### `generate_etch_sign_url(signer_eid:, client_user_id:)`
 
@@ -573,26 +604,48 @@ which carries:
 - `body` the parsed response body
 - `headers` (Hash)
 
-GraphQL and REST errors are normalized into the same shape, the same way
-node-anvil normalizes them.
+GraphQL and REST errors are normalized into the same shape.
 
-## Rate limits
+Two rules about what counts as an error:
+
+- A GraphQL response carrying an `errors` array raises, even though the API
+  answers those with a 200.
+- A 2xx whose body happens to carry only a `name` or a `message` does **not**
+  raise. node-anvil treats that as an error; python-anvil and dotnet-anvil do
+  not, and this client follows them.
+
+## Rate limits and retries
 
 The API rate limits by organization. The client throttles itself to stay under
 the limit rather than letting you hit it:
 
 1. It starts at one request a second, which is below any real limit.
 2. The first response carries your organization's actual limit in its
-   `x-ratelimit-limit` and `x-ratelimit-interval-ms` headers. The client
-   rebuilds its limiter from those, carrying over the requests already spent.
-3. If a 429 still comes back, the client waits the `retry-after` the API asked
-   for plus a 50ms buffer, then retries, up to `max_retries` times. After that
-   it raises `Anvil::RateLimitError`.
+   `x-ratelimit-limit` and `x-ratelimit-interval-ms` headers, and the limiter
+   resizes itself from those. Requests made before that answer wait for it.
+3. A request takes a slot before it is sent and gives it back when its response
+   arrives, and a finished request keeps counting for one interval. So the
+   requests in flight count against the limit alongside the ones that just
+   finished, which is what stops a burst of concurrent calls overshooting.
 
-The limiter is a token bucket, safe to share across threads, so one client
-instance shared by your app throttles your app as a whole. See the
-[rate limit docs](https://www.useanvil.com/docs/api/getting-started/#rate-limits)
-for the specifics of the limits themselves.
+**The limiter is shared per process**, keyed by the environment and a hash of
+the credentials, so every client built for the same organization throttles as
+one. Pass `share_rate_limiter: false` for a client with its own, or
+`rate_limiter:` to supply one.
+
+Retries, when the API does not answer:
+
+| Response | What happens |
+| --- | --- |
+| 429 | waits the `Retry-After` it asked for, capped at 60s, plus 50ms, then tries again, for as long as the API keeps asking |
+| 429 with no `Retry-After` | waits a second, plus the buffer |
+| 500, 502, 503, 504 | retried `max_retries` times, 100ms doubling each time, or the `Retry-After` if it sent one |
+| A connection that never arrived | retried the same way |
+| A timeout | **not** retried, since the request may already have been acted on |
+| Anything else | raised |
+
+`Anvil::RateLimitError` is only raised if a 429 somehow reaches you, which the
+throttling is there to prevent.
 
 ## Typed payloads and responses
 
@@ -631,7 +684,7 @@ packet.to_h                        # the response exactly as it arrived
 ```
 
 The types: `EtchPacket`, `DocumentGroup`, `Signer`, `ForgeSubmission`,
-`WeldData`.
+`WeldData`, `User`, `Organization`.
 
 A custom `response_query` works with this: fields you did not select read as
 `nil`, and fields the type does not declare are still in `to_h` and reachable
@@ -651,6 +704,9 @@ The tests mock HTTP with [WebMock](https://github.com/bblimke/webmock) and talk
 to nothing. The suite is held above 95% line coverage by SimpleCov, which fails
 the run if it drops below.
 
+Runnable examples are in [`examples/`](examples). [CONTRIBUTING.md](CONTRIBUTING.md)
+covers developing, the test client, the types, versioning and publishing.
+
 ## Integration test
 
 `test-client.rb` runs every method against a real Anvil environment and prints
@@ -664,15 +720,15 @@ ANVIL_API_KEY=<your staging API key> ruby test-client.rb
 Testing ruby-anvil 0.1.0 against https://staging.useanvil.com
 
   PASS  request_graphql (organization UESmQW9ZP6AKL9RJ7wlS)
-  PASS  rate limiting (adopted from the response headers) (4 requests per 1000ms)
+  PASS  rate limiting (a burst past the limit surfaces no 429) (5 requests at 4 per 1000ms in 1.5s)
   SKIP  OAuth access token (Bearer auth): Set ANVIL_ACCESS_TOKEN to check Bearer auth
-  PASS  request_rest (14252 bytes)
-  PASS  generate_pdf (markdown) (17875 bytes)
+  PASS  get_current_user (lE0vobbpGM20qRNnkvd7, 1 organization(s))
+  PASS  generate_pdf (markdown) (18023 bytes)
   ...
-  PASS  cleanup (removes the packets this run created) (removed 3 packet(s))
+  PASS  cleanup (removes the packets this run created) (removed 4 packet(s))
   PASS  error handling (a rejected request raises a typed error) (ValidationError on HTTP 400)
 
-20 passed, 0 failed, 1 skipped
+22 passed, 0 failed, 1 skipped
 ```
 
 It exits non-zero if anything failed, so it can be run in a pipeline. Run it

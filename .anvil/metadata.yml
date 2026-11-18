@@ -1,3 +1,7 @@
+packageManagerInstall:
+  - gem install ruby-anvil
+  - bundle add ruby-anvil
+requirements: Ruby 3.1 or newer, no runtime dependencies
 languages:
   - key: ruby
     label: Ruby

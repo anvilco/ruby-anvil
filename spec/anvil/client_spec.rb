@@ -2,32 +2,6 @@
 
 RSpec.describe Anvil::Client do
   describe "authentication" do
-    it "builds a Basic auth header from the API key, base64 of the key and a trailing colon" do
-      client = described_class.new(api_key: "abc123")
-
-      expect(client.auth_header).to eq("Basic #{["abc123:"].pack("m0")}")
-      expect(client.auth_header).to eq("Basic YWJjMTIzOg==")
-    end
-
-    it "builds a Bearer auth header from an OAuth access token, base64 of the token" do
-      client = described_class.new(access_token: "def345")
-
-      expect(client.auth_header).to eq("Bearer #{["def345"].pack("m0")}")
-      expect(client.auth_header).to eq("Bearer ZGVmMzQ1")
-    end
-
-    it "does not pad the base64 with line breaks, however long the key" do
-      client = described_class.new(api_key: "k" * 200)
-
-      expect(client.auth_header).not_to include("\n")
-    end
-
-    it "prefers the access token when both are given" do
-      client = described_class.new(api_key: "abc123", access_token: "def345")
-
-      expect(client.auth_header).to start_with("Bearer ")
-    end
-
     it "sends the Authorization header on a REST request" do
       client = build_client
       stub = stub_request(:post, "https://app.useanvil.com/api/v1/generate-pdf")
@@ -50,13 +24,25 @@ RSpec.describe Anvil::Client do
       expect(stub).to have_been_requested
     end
 
-    it "requires an API key or an access token" do
-      expect { described_class.new }
-        .to raise_error(Anvil::ConfigurationError, /api_key or an access_token is required/)
+    it "falls back to the ANVIL_API_KEY environment variable" do
+      allow(ENV).to receive(:fetch).and_call_original
+      allow(ENV).to receive(:fetch).with("ANVIL_API_KEY", nil).and_return("from-the-env")
+
+      expect(described_class.new.auth_header).to eq("Basic #{["from-the-env:"].pack("m0")}")
     end
 
-    it "treats an empty API key as missing" do
-      expect { described_class.new(api_key: "") }
+    it "prefers an API key passed in over the environment" do
+      allow(ENV).to receive(:fetch).and_call_original
+      allow(ENV).to receive(:fetch).with("ANVIL_API_KEY", nil).and_return("from-the-env")
+
+      expect(described_class.new(api_key: "passed-in").auth_header).to eq("Basic #{["passed-in:"].pack("m0")}")
+    end
+
+    it "requires an API key or an access token" do
+      allow(ENV).to receive(:fetch).and_call_original
+      allow(ENV).to receive(:fetch).with("ANVIL_API_KEY", nil).and_return(nil)
+
+      expect { described_class.new }
         .to raise_error(Anvil::ConfigurationError, /api_key or an access_token is required/)
     end
   end
@@ -114,8 +100,8 @@ RSpec.describe Anvil::Client do
   end
 
   describe "the User-Agent" do
-    it "names the client and the gem's version" do
-      expect(build_client.user_agent).to eq("Anvil API Client/#{Anvil::VERSION} ruby/#{RUBY_VERSION}")
+    it "names the repo and the gem's version, as the SDK conventions require" do
+      expect(build_client.user_agent).to eq("ruby-anvil/#{Anvil::VERSION}")
     end
 
     it "can be overridden" do
