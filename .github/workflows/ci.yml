@@ -67,3 +67,28 @@ jobs:
           gem install --local ruby-anvil-*.gem
           cd "$(mktemp -d)"
           ruby -e 'require "anvil"; Anvil::Client.new(api_key: "x"); puts "ruby-anvil #{Anvil::VERSION} installs and loads"'
+
+
+  check-generated:
+    name: Check the generated types against the specs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: dev/package-lock.json
+
+      - run: npm ci
+        working-directory: dev
+
+      # Regenerates from the pinned @anvilco/types and fails on any difference,
+      # so a hand edit to a generated file, or a bump without a regenerate,
+      # cannot merge
+      - name: Check the generated types are up to date
+        run: npm run check:generated
+        working-directory: dev

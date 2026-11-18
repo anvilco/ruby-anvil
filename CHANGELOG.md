@@ -41,6 +41,10 @@ The first release: the Anvil API in Ruby, with the same coverage as the
   A timeout is not retried, since the request may already have been acted on.
 - `examples/`, and a `CONTRIBUTING.md` covering developing, the test client, the
   types, versioning and publishing.
+- Every type in the API's specs, generated from `@anvilco/types`: the GraphQL
+  object, input and enum types, the arguments of every query and mutation under
+  `Anvil::Operations`, and the REST request bodies. A sync workflow keeps them
+  in step with production, and CI fails on a stale or hand-edited generated file.
 
 ### Notes
 

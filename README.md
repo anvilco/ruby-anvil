@@ -394,7 +394,7 @@ submission.continue_url
 Leave `weld_data_eid` out to start a new Workflow submission, and pass the one
 you got back to add to an existing one.
 
-Returns an `Anvil::Types::ForgeSubmission`.
+Returns an `Anvil::Types::Submission`.
 
 ### `remove_weld_data(eid:)`
 
@@ -667,8 +667,10 @@ Anvil::Payloads::FillPdf.new(data: {}, some_new_option: true).to_h
 # => { "data" => {}, "someNewOption" => true }
 ```
 
-The payloads: `FillPdf`, `GeneratePdf`, `CreateEtchPacket`, `EtchFile`,
-`EtchSigner`, `SignerField`, `ForgeSubmit`.
+The payloads the client's methods take: `FillPdf`, `GeneratePdf`,
+`CreateEtchPacket`, `EtchFile`, `EtchSigner`, `SignerField`, `ForgeSubmit`.
+Behind them, every REST request body and GraphQL input type in the API's specs
+is generated too.
 
 Responses come back under `Anvil::Types` with snake_case readers, and keep
 everything the API sent:
@@ -683,8 +685,11 @@ packet["someFieldAddedYesterday"]  # anything else, by its API name
 packet.to_h                        # the response exactly as it arrived
 ```
 
-The types: `EtchPacket`, `DocumentGroup`, `Signer`, `ForgeSubmission`,
-`WeldData`, `User`, `Organization`.
+Every type the API has is here, generated from its schema: `EtchPacket`,
+`DocumentGroup`, `Signer`, `Submission`, `WeldData`, `User`, `Organization`
+and some fifty more, plus `Anvil::Operations::<Name>Args` for the arguments of
+every query and mutation. See [CONTRIBUTING.md](CONTRIBUTING.md) for how they
+are generated and kept in step with production.
 
 A custom `response_query` works with this: fields you did not select read as
 `nil`, and fields the type does not declare are still in `to_h` and reachable

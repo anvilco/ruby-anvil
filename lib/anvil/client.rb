@@ -258,11 +258,11 @@ module Anvil
     # @param variables [Payloads::ForgeSubmit, Hash]
     # @param response_query [String] the fields to select on the submission
     # @param mutation [String] replaces the whole mutation, response query and all
-    # @return [Types::ForgeSubmission]
+    # @return [Types::Submission]
     def forge_submit(variables:, response_query: nil, mutation: nil)
       query = mutation || GraphQL::Mutations.forge_submit(*[response_query].compact)
       response = request_graphql(query: query, variables: variables)
-      Types::ForgeSubmission.from_h(response["forgeSubmit"])
+      Types::Submission.from_h(response["forgeSubmit"])
     end
 
     # Removes a Workflow submission and everything in it. This cannot be undone.

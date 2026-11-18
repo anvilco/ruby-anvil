@@ -25,6 +25,8 @@ Metrics/ClassLength:
 
 Metrics/ModuleLength:
   Max: 200
+  Exclude:
+    - "lib/anvil/types/generated/*.rb"
 
 Metrics/MethodLength:
   Max: 25
@@ -66,3 +68,18 @@ Style/FrozenStringLiteralComment:
 Style/MutableConstant:
   Exclude:
     - "examples/*.rb"
+
+# lib/anvil/types/generated is written by dev/generate-types.mjs from the API
+# specs: one file per spec holding every class, and a class is documented only
+# when the API documents it. The code itself follows the house style.
+Style/Documentation:
+  Exclude:
+    - "lib/anvil/types/generated/*.rb"
+Style/OneClassPerFile:
+  Exclude:
+    - "lib/anvil/types/generated/*.rb"
+
+# A reopening that only carries documentation, and a generated Args class for a
+# query that takes no arguments, are empty on purpose and say why.
+Lint/EmptyClass:
+  AllowComments: true

@@ -32,8 +32,11 @@ RSpec.describe "Anvil::Client API methods" do
     end
 
     it "takes a typed payload" do
+      # Matched as a Hash: a generated payload lists its fields in the spec's order, not ours
       stub = stub_request(:post, "https://app.useanvil.com/api/v1/fill/abc.pdf")
-        .with(body: '{"title":"My PDF","fontSize":10,"textColor":"#CC0000","data":{"name":"Sally"}}')
+        .with(body: {
+                "title" => "My PDF", "fontSize" => 10, "textColor" => "#CC0000", "data" => { "name" => "Sally" }
+              })
         .to_return(status: 200, body: "%PDF", headers: api_headers)
 
       client.fill_pdf(
@@ -353,7 +356,7 @@ RSpec.describe "Anvil::Client API methods" do
 
       result = client.forge_submit(variables: { forgeEid: "forge123", payload: {} })
 
-      expect(result).to be_a(Anvil::Types::ForgeSubmission)
+      expect(result).to be_a(Anvil::Types::Submission)
       expect(result.eid).to eq("sub123")
       expect(result.continue_url).to eq("https://app.useanvil.com/w/continue")
       expect(result.weld_data.eid).to eq("weld123")

@@ -58,21 +58,51 @@ run.
 
 ## Types
 
-The request payloads in `Anvil::Payloads` and the response types in
-`Anvil::Types` are hand-written. The other clients generate theirs from
-`@anvilco/types`, and this one will too once there is a Ruby generator; until
-then there is no `@anvilco/types` pin, no `typesVersion` in the release config
-and no `sync-api-types.yml` here.
+`lib/anvil/types/generated/` is generated from the API's own specs, which ship in
+the [`@anvilco/types`](https://www.npmjs.com/package/@anvilco/types) npm package
+and are regenerated from production after every deploy:
 
-Both sides pass through what they do not declare: an undeclared keyword argument
-to a payload is camelized and sent, and a response field the type does not know
-stays reachable through `[]` and `to_h`. A new API field does not have to wait
-for a gem release.
+| File | From | Holds |
+| --- | --- | --- |
+| `graphql.rb` | `schema.graphql` | every object type as an `Anvil::Types` class, every enum as a module of string constants |
+| `operations.rb` | `schema.graphql` | every input type as an `Anvil::Payloads` class, the arguments of every query and mutation as `Anvil::Operations::<Name>Args`, and `Anvil::Operations::NAMES` |
+| `rest.rb` | `openapi.json` | the REST request bodies as `Anvil::Payloads` classes |
 
-The GraphQL operation strings in `lib/anvil/graphql.rb` are copied from
-node-anvil's `src/graphql/`, variable names and default response fields
-included, so the same call returns the same fields in either client. Keep them
-in step.
+`dev/package.json` pins the exact `@anvilco/types` version; the generated files
+say which one in their header. To move to a newer one:
+
+```sh
+dev/fetch-schema.sh            # or dev/fetch-schema.sh 1.2.0
+bundle exec rake types:generate
+```
+
+CI runs `rake types:check`, which regenerates and fails on any difference, so a
+hand edit to a generated file cannot merge, and neither can a bump without a
+regenerate. `.github/workflows/sync-api-types.yml` does the bump for you: it
+runs when anvil-js publishes a new `@anvilco/types` (and on a Monday cron as a
+backstop), regenerates, and opens one PR. A sync that crosses a major version of
+`@anvilco/types` is a breaking change here too, since the generated types are
+public API: the PR says so and the changelog note it adds is marked `BREAKING`.
+
+The generator is `dev/generate-types.mjs`, a Node script because the specs ship
+as an npm package. It emits into the client's own attribute DSL
+(`Anvil::Types::Base`, `Anvil::Payloads::Base`), which is why generated classes
+already map camelCase and keep fields they do not declare. The hand-written
+files under `lib/anvil/types/` and `lib/anvil/payloads/` reopen generated
+classes to add convenience methods, or subclass them under the name the client's
+API uses (`Payloads::CreateEtchPacket` is `Operations::CreateEtchPacketArgs`).
+They never redeclare fields.
+
+Two things the generator does on purpose. A type that would shadow a Ruby core
+constant from inside `Anvil::Types` is renamed (`File` is `AnvilFile`; the list
+is `RENAMES`). An attribute whose name Ruby or the DSL already owns gets a
+`_value` suffix and keeps the API's spelling as its key (`BillingPeriod#end_value`
+reads `end`). A spec fails when the schema adds a case either list misses.
+
+The GraphQL operation strings in `lib/anvil/graphql.rb` are hand-written and
+copied from node-anvil's `src/graphql/`, variable names and default response
+fields included, so the same call returns the same fields in either client. Keep
+them in step.
 
 ## Versioning
 

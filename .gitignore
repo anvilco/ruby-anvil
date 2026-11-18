@@ -12,3 +12,4 @@
 /vendor/
 Gemfile.lock
 .rspec_status
+/dev/node_modules/
