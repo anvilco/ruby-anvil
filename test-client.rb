@@ -4,10 +4,6 @@
 # Runs every client method against a real Anvil environment (staging by
 # default) and prints a pass or fail for each.
 #
-# Everything it checks is the client's public behavior: what each method sends,
-# and the shape of what it returns. Run it against a release before and after a
-# change to see which behaviors changed.
-#
 # Usage:
 #   ANVIL_API_KEY=<your staging API key> ruby test-client.rb
 #
@@ -21,11 +17,7 @@
 #   ANVIL_FORGE_EID        Optional. The webform (Forge) in a Workflow to submit to.
 #                          Defaults to the first one in your organization.
 #
-# Everything it creates is test data, and it removes all of it at the end: the
-# Etch packets are test packets with embedded signers, so no mail goes to
-# anyone, and the Workflow submission is a test submission. The PDF template
-# and the webform it uses are found in the organization, not created, so they
-# survive the run for the next one.
+# Removes everything it creates at the end; CONTRIBUTING.md has the detail.
 
 $LOAD_PATH.unshift(File.expand_path("lib", __dir__))
 
@@ -308,7 +300,6 @@ runner.check "create_etch_packet (URL upload)" do
       name: "ruby-anvil test client (URL upload)",
       isDraft: true,
       isTest: true,
-      # Anvil fetches this itself, so it has to be publicly reachable
       files: [{
         id: "testFile",
         title: "URL File",

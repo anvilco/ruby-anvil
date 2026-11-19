@@ -56,7 +56,6 @@ module Anvil
       when Array then schema.all? { |sub| valid_upload_schema?(sub, schema) }
       when Hash then schema.all? { |sub_key, sub| valid_upload_schema?(sub, schema, sub_key) }
       else
-        # A file anywhere other than under a `file` key is a mistake
         !file?(schema)
       end
     end
@@ -65,7 +64,6 @@ module Anvil
     #
     # @api private
     def valid_file_value?(schema, parent)
-      # Every flavor has to be nested in an object, never passed on its own
       return false unless parent.is_a?(Hash) && fetch_either(parent, :file).equal?(schema)
       return file?(schema) unless schema.is_a?(Hash)
 

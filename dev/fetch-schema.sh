@@ -3,11 +3,6 @@
 # dependency in dev/package.json, bumped to the latest published version
 # (https://www.npmjs.com/package/@anvilco/types), or the one given.
 #
-# The package ships the Anvil GraphQL schema (`@anvilco/types/schema.graphql`)
-# and the OpenAPI spec (`@anvilco/types/openapi.json`), both regenerated from
-# production after every deploy. The other clients generate from the same
-# copy, so every client describes the same API build.
-#
 # Needs no API key. Then run `npm run generate` in dev/ to regenerate
 # lib/anvil/types/generated.
 #

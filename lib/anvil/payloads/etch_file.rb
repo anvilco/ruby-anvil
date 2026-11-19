@@ -15,7 +15,7 @@ module Anvil
     #     fields: [{ id: "signature", type: "signature", pageNum: 1, rect: { ... } }]
     #   )
     class EtchFile
-      # Reopened for the documentation above; every field is generated
+      # Reopened to carry the documentation above
     end
   end
 end

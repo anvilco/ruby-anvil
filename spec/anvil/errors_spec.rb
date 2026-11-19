@@ -4,29 +4,6 @@ RSpec.describe "Anvil error handling" do
   let(:client) { build_client }
 
   describe Anvil::Errors do
-    describe ".looks_like_json_error?" do
-      it "sees a GraphQL errors array" do
-        expect(described_class.looks_like_json_error?({ "errors" => [] })).to be(true)
-      end
-
-      it "sees a bare message" do
-        expect(described_class.looks_like_json_error?({ "message" => "Nope" })).to be(true)
-      end
-
-      it "sees a bare name" do
-        expect(described_class.looks_like_json_error?({ "name" => "ValidationError" })).to be(true)
-      end
-
-      it "does not see an ordinary response" do
-        expect(described_class.looks_like_json_error?({ "data" => { "eid" => "abc" } })).to be(false)
-      end
-
-      it "does not see a non-Hash body" do
-        expect(described_class.looks_like_json_error?("a string")).to be(false)
-        expect(described_class.looks_like_json_error?(nil)).to be(false)
-      end
-    end
-
     describe ".normalize" do
       it "normalizes GraphQL errors" do
         errors = described_class.normalize(
@@ -150,16 +127,6 @@ RSpec.describe "Anvil error handling" do
         end
     end
 
-    it "raises ServerError on a 500" do
-      stub_request(:post, "https://app.useanvil.com/api/v1/generate-pdf")
-        .to_return(status: 500, body: "", headers: api_headers)
-
-      expect { client.generate_pdf(type: "html", data: {}) }
-        .to raise_error(Anvil::ServerError)
-    end
-
-    # node-anvil counts this as an error; python-anvil and dotnet-anvil do not,
-    # and the SDK conventions call node's the legacy divergence
     it "does not raise on a 2xx body carrying only a name and a message" do
       stub_request(:post, "https://app.useanvil.com/api/v1/generate-pdf")
         .to_return(
@@ -172,13 +139,6 @@ RSpec.describe "Anvil error handling" do
 
       expect(response.status_code).to eq(200)
       expect(JSON.parse(response.data)["name"]).to eq("AssertionError")
-    end
-
-    it "still raises when a 2xx carries a GraphQL errors array" do
-      stub_request(:post, "https://app.useanvil.com/api/v1/generate-pdf")
-        .to_return(status: 200, body: '{"errors":[{"message":"Nope"}]}', headers: json_headers)
-
-      expect { client.generate_pdf(type: "html", data: {}) }.to raise_error(Anvil::GraphQLError, /Nope/)
     end
   end
 

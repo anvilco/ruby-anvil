@@ -149,9 +149,8 @@ module Anvil
           raise
         end
         finish
-        # The first response has arrived, whether or not it carried the limit
-        # headers, so the requests held behind it can go. Without this a
-        # response missing the headers would hold every later request forever.
+        # The first response is in, with or without limit headers: let the requests
+        # held behind it go, or a response missing them would hold them forever
         release_setup_gate
         return result
       end

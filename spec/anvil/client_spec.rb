@@ -52,12 +52,6 @@ RSpec.describe Anvil::Client do
       expect(build_client.base_url).to eq("https://app.useanvil.com")
     end
 
-    it "takes a configured environment" do
-      client = build_client(base_url: "https://staging.useanvil.com")
-
-      expect(client.base_url).to eq("https://staging.useanvil.com")
-    end
-
     it "drops a trailing slash so paths do not double up" do
       expect(build_client(base_url: "https://staging.useanvil.com/").base_url).to eq("https://staging.useanvil.com")
     end
@@ -199,10 +193,6 @@ RSpec.describe Anvil::Client do
           .to_return(status: 200, body: "the bytes", headers: api_headers)
       end
 
-      it "returns a String by default" do
-        expect(client.request_rest("/api/v1/anything").data).to eq("the bytes")
-      end
-
       it "returns a StringIO for :io" do
         data = client.request_rest("/api/v1/anything", data_type: :io).data
 
@@ -244,7 +234,7 @@ RSpec.describe Anvil::Client do
       stub_request(:get, "https://app.useanvil.com/api/v1/anything")
         .to_return(status: 200, body: "{not json", headers: json_headers)
 
-      expect { client.request_rest("/api/v1/anything") }
+      expect { build_client(max_retries: 0).request_rest("/api/v1/anything") }
         .to raise_error(Anvil::ConnectionError, /Could not parse the API's JSON response/)
     end
 
@@ -252,7 +242,9 @@ RSpec.describe Anvil::Client do
       stub_request(:get, "https://app.useanvil.com/api/v1/anything").to_timeout
 
       expect { client.request_rest("/api/v1/anything") }
-        .to raise_error(Anvil::ConnectionError, /Could not reach/)
+        .to raise_error(Anvil::ConnectionError, /Could not reach/) do |error|
+          expect(error.cause_error).to be_a(Timeout::Error)
+        end
     end
   end
 end

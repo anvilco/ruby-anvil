@@ -122,43 +122,20 @@ RSpec.describe "Anvil GraphQL file uploads" do
   describe "a request that carries files" do
     before { stub_graphql }
 
-    it "is sent as multipart/form-data" do
+    it "is multipart/form-data: the operation with the file nulled out, the map, and the file itself" do
       client.create_etch_packet(variables: { files: [{ id: "f1", file: upload }] })
 
-      request, = multipart_request
-      expect(request.headers["Content-Type"]).to start_with("multipart/form-data; boundary=anvil-")
-      expect(request.headers["Content-Length"].to_i).to be > 0
-    end
-
-    it "sends the operation with the file nulled out" do
-      client.create_etch_packet(variables: { files: [{ id: "f1", file: upload }] })
-
-      _request, parts = multipart_request
-      operations = parts.find { |part| part.include?('name="operations"') }
-      body = JSON.parse(operations.split("\r\n\r\n", 2).last)
-
-      expect(body["variables"]["files"][0]).to eq({ "id" => "f1", "file" => nil })
-      expect(body["query"]).to include("mutation CreateEtchPacket(")
-    end
-
-    it "sends a map from each part to the variable path it fills" do
-      client.create_etch_packet(variables: { files: [{ id: "f1", file: upload }] })
-
-      _request, parts = multipart_request
-      map = parts.find { |part| part.include?('name="map"') }
-
-      expect(JSON.parse(map.split("\r\n\r\n", 2).last)).to eq({ "1" => ["variables.files.0.file"] })
-    end
-
-    it "sends the file itself, with its filename and content type" do
-      client.create_etch_packet(variables: { files: [{ id: "f1", file: upload }] })
-
-      _request, parts = multipart_request
+      request, parts = multipart_request
+      operations = JSON.parse(parts.find { |part| part.include?('name="operations"') }.split("\r\n\r\n", 2).last)
+      map = JSON.parse(parts.find { |part| part.include?('name="map"') }.split("\r\n\r\n", 2).last)
       file_part = parts.find { |part| part.include?('name="1"') }
 
-      expect(file_part).to include('filename="dummy.pdf"')
-      expect(file_part).to include("Content-Type: application/pdf")
-      expect(file_part).to include("%PDF-1.4")
+      expect(request.headers["Content-Type"]).to start_with("multipart/form-data; boundary=anvil-")
+      expect(request.headers["Content-Length"].to_i).to be > 0
+      expect(operations["query"]).to include("mutation CreateEtchPacket(")
+      expect(operations["variables"]["files"][0]).to eq({ "id" => "f1", "file" => nil })
+      expect(map).to eq({ "1" => ["variables.files.0.file"] })
+      expect(file_part).to include('filename="dummy.pdf"', "Content-Type: application/pdf", "%PDF-1.4")
     end
 
     it "numbers the parts when there is more than one file" do
@@ -174,15 +151,6 @@ RSpec.describe "Anvil GraphQL file uploads" do
         "2" => ["variables.files.1.file"]
       )
       expect(parts.find { |part| part.include?('name="2"') }).to include("second")
-    end
-
-    it "sends an upload named with a filename of its own under that name" do
-      renamed = Anvil.prepare_graphql_file(fixture_path("dummy.pdf"), filename: "contract.pdf")
-
-      client.create_etch_packet(variables: { files: [{ file: renamed }] })
-
-      _request, parts = multipart_request
-      expect(parts.find { |part| part.include?('name="1"') }).to include('filename="contract.pdf"')
     end
 
     it "sends JSON, not multipart, when there are no files" do

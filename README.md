@@ -99,8 +99,8 @@ client = Anvil::Client.new(api_key: "7j2JuUWmN4fGjBxsCltWaybHOEy3UEtt")
 client = Anvil::Client.new(access_token: "an-oauth-access-token")
 ```
 
-Both are base64 encoded the same way node-anvil encodes them, so a key that
-works in one client works in the other:
+Each goes in the `Authorization` header the way the other Anvil clients send
+it, so a credential that works in one client works in the other:
 
 | Credential | Header |
 | --- | --- |

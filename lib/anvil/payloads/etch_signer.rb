@@ -16,7 +16,7 @@ module Anvil
     # OpenAPI spec in generated/rest.rb. Signers sign in the order they appear
     # in the packet's `signers`, unless `routing_order` says otherwise.
     class EtchSigner
-      # Reopened for the documentation above; every field is generated
+      # Reopened to carry the documentation above
     end
   end
 end

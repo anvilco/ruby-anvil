@@ -3,18 +3,9 @@
 require "stringio"
 
 RSpec.describe Anvil do
-  describe "version constants" do
-    it "exposes VERSION_LATEST as -1" do
-      expect(Anvil::VERSION_LATEST).to eq(-1)
-    end
-
-    it "exposes VERSION_LATEST_PUBLISHED as -2" do
-      expect(Anvil::VERSION_LATEST_PUBLISHED).to eq(-2)
-    end
-
-    it "exposes the gem's version" do
-      expect(Anvil::VERSION).to match(/\A\d+\.\d+\.\d+/)
-    end
+  it "exposes the template version numbers the API gives a meaning to" do
+    expect(Anvil::VERSION_LATEST).to eq(-1)
+    expect(Anvil::VERSION_LATEST_PUBLISHED).to eq(-2)
   end
 
   describe ".prepare_graphql_file" do

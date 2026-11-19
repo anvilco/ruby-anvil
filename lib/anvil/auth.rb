@@ -45,9 +45,7 @@ module Anvil
       !!(header && payload && header["alg"].is_a?(String))
     end
 
-    # Decodes one base64url segment of a JWT. Done with pack/unpack rather than
-    # the base64 gem, which stopped being a default gem in Ruby 3.4, so the gem
-    # keeps no runtime dependencies.
+    # Decodes one base64url segment of a JWT with pack/unpack, not the base64 gem: CONTRIBUTING.md says why.
     #
     # @api private
     def decode_json_segment(segment)

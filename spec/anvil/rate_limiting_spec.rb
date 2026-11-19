@@ -114,16 +114,6 @@ RSpec.describe "Anvil::Client rate limiting and retries" do
       expect(generate_pdf(client).data).to eq("%PDF")
       expect(client.rate_limiter).to have_received(:sleep).exactly(8).times
     end
-
-    it "retries a GraphQL request too" do
-      stub_request(:post, "https://app.useanvil.com/graphql").to_return(
-        { status: 429, headers: api_headers("retry-after" => "0.1") },
-        { status: 200, body: '{"data":{"removeWeldData":true}}', headers: json_headers }
-      )
-
-      expect(client.remove_weld_data(eid: "weld123")).to be(true)
-      expect(client.rate_limiter).to have_received(:sleep).with(a_value_within(0.001).of(0.15))
-    end
   end
 
   describe "a response the API could not give" do

@@ -31,10 +31,7 @@ RSpec.configure do |config|
   end
 
   config.include(Module.new do
-    # A client whose rate limiter is its own and effectively open, so a spec
-    # that makes several requests does not wait between them and nothing leaks
-    # into the next spec. Sharing is the production default and is covered in
-    # rate_limiting_spec.rb. The limiter itself is covered in rate_limiter_spec.rb.
+    # Its own open limiter, so examples neither wait nor leak into each other; CONTRIBUTING.md has the detail
     def build_client(**overrides)
       Anvil::Client.new(
         api_key: "abc123",

@@ -158,18 +158,11 @@ RSpec.describe Anvil::RateLimiter do
       expect(one).to be(two)
     end
 
-    it "keeps different credentials apart" do
+    it "keeps different credentials and different environments apart" do
       one = described_class.shared(base_url: "https://staging.useanvil.com", auth_header: "Basic abc")
-      two = described_class.shared(base_url: "https://staging.useanvil.com", auth_header: "Basic zzz")
 
-      expect(one).not_to be(two)
-    end
-
-    it "keeps different environments apart" do
-      one = described_class.shared(base_url: "https://staging.useanvil.com", auth_header: "Basic abc")
-      two = described_class.shared(base_url: "https://app.useanvil.com", auth_header: "Basic abc")
-
-      expect(one).not_to be(two)
+      expect(one).not_to be(described_class.shared(base_url: "https://staging.useanvil.com", auth_header: "Basic zzz"))
+      expect(one).not_to be(described_class.shared(base_url: "https://app.useanvil.com", auth_header: "Basic abc"))
     end
   end
 end

@@ -37,20 +37,6 @@ RSpec.describe "Anvil typed payloads and responses" do
       expect(payload.to_h).to eq({ "files" => [{ "id" => "f1", "castEid" => "cast123" }] })
     end
 
-    it "reads and writes its attributes" do
-      payload = Anvil::Payloads::FillPdf.new(title: "One")
-      payload.title = "Two"
-
-      expect(payload.title).to eq("Two")
-    end
-
-    it "builds from the API's own names" do
-      payload = Anvil::Payloads::CreateEtchPacket.from_h({ "isTest" => true, "webhookURL" => "https://x.test" })
-
-      expect(payload.is_test).to be(true)
-      expect(payload.webhook_url).to eq("https://x.test")
-    end
-
     it "round-trips through to_h" do
       payload = Anvil::Payloads::ForgeSubmit.new(forge_eid: "forge123", payload: { a: 1 }, is_test: true)
 

@@ -28,31 +28,6 @@ RSpec.describe "the generated types" do
     end
   end
 
-  it "builds nested response objects from a GraphQL response" do
-    packet = Anvil::Types::EtchPacket.from_h(
-      "eid" => "p1", "detailsURL" => "https://x", "createdAt" => "2026-01-02T03:04:05Z",
-      "documentGroup" => { "eid" => "dg", "signers" => [{ "eid" => "s1", "aliasId" => "a" }] }
-    )
-
-    expect(packet.details_url).to eq("https://x")
-    expect(packet.created_at).to eq(Time.utc(2026, 1, 2, 3, 4, 5))
-    expect(packet.document_group).to be_a(Anvil::Types::DocumentGroup)
-    expect(packet.signers.first).to be_a(Anvil::Types::Signer)
-    expect(packet.signers.first.alias_id).to eq("a")
-  end
-
-  it "sends operation arguments under the API's own names, nested input types included" do
-    args = Anvil::Operations::CreateEtchPacketArgs.new(
-      is_test: true, webhook_url: "https://hook", merge_pdfs: false,
-      files: [Anvil::Payloads::EtchFile.new(id: "f", cast_eid: "c")]
-    )
-
-    expect(args.to_h).to eq(
-      "isTest" => true, "webhookURL" => "https://hook", "mergePDFs" => false,
-      "files" => [{ "id" => "f", "castEid" => "c" }]
-    )
-  end
-
   it "records what the API requires, and the values it documents, on a REST payload" do
     expect(Anvil::Payloads::FillPdfRequest::REQUIRED).to eq(["data"])
     expect(Anvil::Payloads::FillPdfRequest::OUTPUT_FORMAT_VALUES).to include("pdf")

@@ -191,16 +191,6 @@ module Anvil
   module Errors
     module_function
 
-    # Does this parsed JSON body look like an error, whatever its status code?
-    #
-    # @param json [Object]
-    # @return [Boolean]
-    def looks_like_json_error?(json)
-      return false unless json.is_a?(Hash)
-
-      !!(json["errors"] || json["message"] || json["name"])
-    end
-
     # @param json [Object, nil] the parsed response body
     # @param status_text [String] the HTTP reason phrase, used when the body
     #   says nothing useful

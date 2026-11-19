@@ -503,7 +503,6 @@ module Anvil
         if status_code >= 300
           Errors.error_class_for(status_code)
         elsif graphql_errors?(json)
-          # GraphQL answers 200 even when the query failed
           GraphQLError
         else
           ResponseError

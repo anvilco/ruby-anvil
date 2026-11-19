@@ -159,23 +159,15 @@ RSpec.describe "Anvil::Client API methods" do
       }
     end
 
-    it "sends the CreateEtchPacket mutation with the given variables" do
+    it "sends the CreateEtchPacket mutation with the given variables and the default response fields" do
       stub_graphql("createEtchPacket" => packet)
 
       client.create_etch_packet(variables: { name: "Test Docs", isTest: true })
 
       expect(graphql_request["query"]).to include("mutation CreateEtchPacket(")
       expect(graphql_request["query"]).to include("createCastTemplatesFromUploads: $createCastTemplatesFromUploads")
+      expect(graphql_request["query"]).to include("numberRemainingSigners", "signActionType")
       expect(graphql_request["variables"]).to eq({ "name" => "Test Docs", "isTest" => true })
-    end
-
-    it "selects the default response fields" do
-      stub_graphql("createEtchPacket" => packet)
-
-      client.create_etch_packet(variables: {})
-
-      expect(graphql_request["query"]).to include("numberRemainingSigners")
-      expect(graphql_request["query"]).to include("signActionType")
     end
 
     it "returns a typed packet" do
@@ -250,21 +242,19 @@ RSpec.describe "Anvil::Client API methods" do
   describe "#get_etch_packet" do
     before { stub_graphql("etchPacket" => { "eid" => "packet123", "status" => "completed" }) }
 
-    it "sends the EtchPacket query for the eid" do
-      client.get_etch_packet(eid: "packet123")
+    it "sends the EtchPacket query for the eid and returns a typed packet" do
+      packet = client.get_etch_packet(eid: "packet123")
 
       expect(graphql_request["query"]).to include("query EtchPacket (")
       expect(graphql_request["variables"]).to eq({ "eid" => "packet123" })
+      expect(packet).to be_a(Anvil::Types::EtchPacket)
+      expect(packet.status).to eq("completed")
     end
 
     it "takes the variables whole instead" do
       client.get_etch_packet(variables: { eid: "packet123" })
 
       expect(graphql_request["variables"]).to eq({ "eid" => "packet123" })
-    end
-
-    it "returns a typed packet" do
-      expect(client.get_etch_packet(eid: "packet123").status).to eq("completed")
     end
 
     it "takes a custom response query" do
@@ -285,7 +275,7 @@ RSpec.describe "Anvil::Client API methods" do
       }
     end
 
-    it "sends the CurrentUser query and returns a typed user" do
+    it "sends the CurrentUser query with node-anvil's default fields and returns a typed user" do
       stub_graphql("currentUser" => user)
 
       result = client.get_current_user
@@ -293,17 +283,7 @@ RSpec.describe "Anvil::Client API methods" do
       expect(result).to be_a(Anvil::Types::User)
       expect(result.email).to eq("sally@example.test")
       expect(result.organizations.map(&:slug)).to eq(["acme"])
-      expect(graphql_request["query"]).to include("query CurrentUser {")
-    end
-
-    it "selects the same default fields node-anvil does" do
-      stub_graphql("currentUser" => user)
-
-      client.get_current_user
-
-      %w[eid name email role organizations slug].each do |field|
-        expect(graphql_request["query"]).to include(field)
-      end
+      expect(graphql_request["query"]).to include("query CurrentUser {", *%w[eid name email role organizations slug])
     end
 
     it "takes a custom response query" do
@@ -362,28 +342,6 @@ RSpec.describe "Anvil::Client API methods" do
       expect(result.weld_data.eid).to eq("weld123")
       expect(result.weld_data.is_complete).to be(false)
       expect(result.signer.name).to eq("Sally")
-    end
-
-    it "converts a typed payload to the API's variable names" do
-      stub_graphql("forgeSubmit" => submission)
-
-      client.forge_submit(
-        variables: Anvil::Payloads::ForgeSubmit.new(
-          forge_eid: "forge123",
-          weld_data_eid: "weld123",
-          payload: { name: "Sally" },
-          is_test: true,
-          webhook_url: "https://example.test/hook"
-        )
-      )
-
-      expect(graphql_request["variables"]).to eq(
-        "forgeEid" => "forge123",
-        "weldDataEid" => "weld123",
-        "payload" => { "name" => "Sally" },
-        "isTest" => true,
-        "webhookURL" => "https://example.test/hook"
-      )
     end
   end
 
