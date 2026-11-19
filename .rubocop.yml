@@ -1,0 +1,85 @@
+AllCops:
+  TargetRubyVersion: 3.1
+  NewCops: enable
+  SuggestExtensions: false
+  Exclude:
+    - "vendor/**/*"
+    - "pkg/**/*"
+
+# The gem is named ruby-anvil and the library Anvil, so lib/ruby-anvil.rb is a
+# shim and the rest lives under lib/anvil/.
+Naming/FileName:
+  Exclude:
+    - "lib/ruby-anvil.rb"
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/StringLiteralsInInterpolation:
+  EnforcedStyle: double_quotes
+
+# The client mirrors the API's surface, and its request handling is a pipeline
+# that reads worse broken into pieces.
+Metrics/ClassLength:
+  Max: 400
+
+Metrics/ModuleLength:
+  Max: 200
+  Exclude:
+    - "lib/anvil/types/generated/*.rb"
+
+Metrics/MethodLength:
+  Max: 25
+
+Metrics/AbcSize:
+  Max: 25
+
+Metrics/CyclomaticComplexity:
+  Max: 12
+
+Metrics/PerceivedComplexity:
+  Max: 12
+
+Metrics/ParameterLists:
+  Max: 10
+  MaxOptionalParameters: 5
+
+Layout/LineLength:
+  Max: 120
+
+# Chained calls line up under their receiver rather than under the dot of the
+# line above, which keeps long WebMock and client chains readable.
+Layout/MultilineMethodCallIndentation:
+  EnforcedStyle: indented
+
+# The integration script is a list of checks, each one a block
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*.rb"
+    - "*.gemspec"
+    - "test-client.rb"
+
+# The examples are copy-pasteable snippets for someone learning the API, so
+# they carry no boilerplate a reader would have to look past.
+Style/FrozenStringLiteralComment:
+  Exclude:
+    - "examples/*.rb"
+
+Style/MutableConstant:
+  Exclude:
+    - "examples/*.rb"
+
+# lib/anvil/types/generated is written by dev/generate-types.mjs from the API
+# specs: one file per spec holding every class, and a class is documented only
+# when the API documents it. The code itself follows the house style.
+Style/Documentation:
+  Exclude:
+    - "lib/anvil/types/generated/*.rb"
+Style/OneClassPerFile:
+  Exclude:
+    - "lib/anvil/types/generated/*.rb"
+
+# A reopening that only carries documentation, and a generated Args class for a
+# query that takes no arguments, are empty on purpose and say why.
+Lint/EmptyClass:
+  AllowComments: true

@@ -1,0 +1,233 @@
+name: Sync API Types
+
+# Bumps the @anvilco/types dependency in dev/, which ships the API's specs (the
+# GraphQL schema and the OpenAPI spec, regenerated from production after every
+# deploy by anvil-js's own sync), regenerates lib/anvil/types/generated, and
+# opens one PR when any of it changed. Runs when anvil-js publishes a new
+# @anvilco/types: its release workflow sends `anvilco-types-published` here.
+# That dispatch is best-effort with no retry, so the weekly cron is a backstop.
+#
+# @anvilco/types takes a major bump when the API removes or changes a type,
+# field or argument, a minor for additions and a patch for descriptions. The
+# generated types are this gem's public API, so a sync across a major is a
+# breaking change here too: the PR says so, its changelog note is marked
+# BREAKING, it is labelled `breaking`, and the GitHub users in the
+# SYNC_BREAKING_REVIEWERS repository variable (comma separated, optional) are
+# asked to review. The bump is worked out from the version dev/package.json
+# pinned before and after the refresh; the dispatch's `bump` can only raise it.
+
+on:
+  repository_dispatch:
+    types: [anvilco-types-published]
+  schedule:
+    - cron: '0 13 * * 1' # Every Monday at 1pm UTC; 10, 11 and 12 are the other clients
+  workflow_dispatch:
+
+# BRANCH is force-pushed, so never let two runs race on it.
+concurrency: sync-api-types
+
+env:
+  BRANCH: chore/sync-api-types
+  SPEC_PATHS: dev/package.json dev/package-lock.json
+  TYPES_DIR: lib/anvil/types/generated
+
+jobs:
+  sync-api-types:
+    name: Sync API Types
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      # Always the default branch, so a manual run from another branch can't
+      # put that branch's commits in the PR. No persisted credentials:
+      # CI_GITHUB_TOKEN is only handed to git and gh in the steps that push.
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          persist-credentials: false
+
+      - name: Check the CI_GITHUB_TOKEN secret is set
+        env:
+          GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::The CI_GITHUB_TOKEN repository secret is not set. The workflow needs it to push the sync branch and open the PR (the workflow's own GITHUB_TOKEN can't trigger the PR's CI). Add a token with Contents: write and Pull requests: write on this repository under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: dev/package-lock.json
+
+      - run: npm ci
+        working-directory: dev
+
+      # One step, so the types are never regenerated from a spec that failed
+      # to fetch. The dispatch names the version, so the run doesn't depend on
+      # npm's `latest` tag having propagated seconds after the publish.
+      - name: Fetch the specs and generate the types
+        id: generate
+        continue-on-error: true
+        env:
+          TYPES_VERSION: ${{ github.event.client_payload.version }}
+        run: |
+          dev/fetch-schema.sh "${TYPES_VERSION:-latest}"
+          npm run generate --prefix dev
+
+      - name: Discard the output if that failed
+        if: steps.generate.outcome != 'success'
+        run: git checkout -- $SPEC_PATHS "$TYPES_DIR"
+
+      - name: Check for changes
+        id: changes
+        run: |
+          echo "changed=$(git diff --quiet -- $SPEC_PATHS "$TYPES_DIR" && echo false || echo true)" >> "$GITHUB_OUTPUT"
+          git diff --stat
+
+      - name: Open or update PR
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          TYPES_VERSION: ${{ github.event.client_payload.version }}
+          TYPES_RELEASE_URL: ${{ github.event.client_payload.releaseUrl }}
+          DISPATCH_BUMP: ${{ github.event.client_payload.bump }}
+          REVIEWERS: ${{ vars.SYNC_BREAKING_REVIEWERS }}
+        run: |
+          # Not GITHUB_TOKEN: pushes and PRs made with it don't trigger
+          # workflows, so the PR would never get its CI checks.
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          # A deploy that didn't move the API again would otherwise force-push
+          # an identical commit, re-running CI and discarding edits on the branch.
+          PR=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$PR" ] && git fetch -q --depth=1 origin "$BRANCH" && git diff --quiet FETCH_HEAD -- $SPEC_PATHS "$TYPES_DIR"; then
+            echo "PR #$PR already has this output"
+            exit 0
+          fi
+
+          # Which @anvilco/types this is, and whether the sync crosses a major,
+          # minor or patch: from the exact version dev/package.json pins on
+          # master and after the refresh. A dispatch's own bump can raise it.
+          read -r OLD_VERSION NEW_VERSION TYPES_BUMP < <(node - "$DISPATCH_BUMP" <<'JS'
+          const { execFileSync } = require('child_process')
+          const pinned = (json) => JSON.parse(json).dependencies['@anvilco/types']
+          const next = pinned(require('fs').readFileSync('dev/package.json', 'utf8'))
+          let prev = ''
+          try { prev = pinned(execFileSync('git', ['show', 'HEAD:dev/package.json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })) } catch {}
+          const parse = (v) => (/^(\d+)\.(\d+)\.(\d+)/.exec(v || '') || []).slice(1).map(Number)
+          const [a, b] = [parse(prev), parse(next)]
+          const order = ['patch', 'minor', 'major']
+          let bump = a.length && b.length ? (b[0] !== a[0] ? 'major' : b[1] !== a[1] ? 'minor' : 'patch') : 'patch'
+          const dispatched = process.argv[2]
+          if (order.indexOf(dispatched) > order.indexOf(bump)) bump = dispatched
+          console.log(prev || '-', next, bump)
+          JS
+          )
+          TYPES_VERSION=${TYPES_VERSION:-$NEW_VERSION}
+          TYPES_RELEASE_URL=${TYPES_RELEASE_URL:-https://github.com/anvilco/anvil-js/releases/tag/@anvilco/types@$TYPES_VERSION}
+          echo "@anvilco/types $OLD_VERSION -> $NEW_VERSION: a $TYPES_BUMP sync"
+
+          # Note the sync under Unreleased in the changelog, once per release.
+          # BREAKING on a major: the generated types are public API.
+          if [ "$TYPES_BUMP" = major ]; then
+            NOTE="- BREAKING: Sync the generated API types in \`Anvil::Types\`, \`Anvil::Payloads\` and \`Anvil::Operations\` with the production API, which removed or changed types or fields. Each one is listed in the [\`@anvilco/types@$TYPES_VERSION\` release notes]($TYPES_RELEASE_URL)."
+          else
+            NOTE="- Sync the generated API types with the production API."
+          fi
+          NOTE="$NOTE" node - <<'JS'
+          const fs = require('fs')
+          const path = 'CHANGELOG.md'
+          let text = fs.readFileSync(path, 'utf8')
+          const note = process.env.NOTE
+          const match = /^## \[Unreleased\]\n([\s\S]*?)(?=^## \[|(?![\s\S]))/m.exec(text)
+          if (match && !match[1].includes(note)) {
+            const body = match[1].replace(/\n+$/, '')
+            const section = body ? `${body}\n${note}\n\n` : `\n${note}\n\n`
+            text = text.slice(0, match.index + match[0].length - match[1].length) + section + text.slice(match.index + match[0].length)
+            fs.writeFileSync(path, text)
+          }
+          JS
+
+          if [ "$EVENT_NAME" = repository_dispatch ]; then
+            TRIGGER="the release of \`@anvilco/types@$TYPES_VERSION\` ($TYPES_RELEASE_URL)."
+          else
+            TRIGGER="a \`$EVENT_NAME\` run."
+          fi
+          INCREMENT=patch
+          case "$TYPES_BUMP" in major | minor) INCREMENT=$TYPES_BUMP ;; esac
+          {
+            echo "Automated sync of the generated types from the published \`@anvilco/types\`, which carries the production API's specs. Triggered by $TRIGGER"
+            echo
+            echo "- \`dev/package.json\`: the \`@anvilco/types\` dependency bumped to the published version; it ships the GraphQL schema and the OpenAPI spec"
+            echo "- \`$TYPES_DIR/\`: regenerated from them with \`npm run generate\` in \`dev/\`"
+            echo
+            case "$TYPES_BUMP" in
+              major)
+                echo "**This sync crosses a major release of \`@anvilco/types\` ($OLD_VERSION to $NEW_VERSION): the API removed or changed types or fields, listed in the [\`@anvilco/types@$TYPES_VERSION\` release notes]($TYPES_RELEASE_URL).** The generated types are this gem's public API, so the changelog note is marked BREAKING and the next release must be a major. Review each change before merging."
+                ;;
+              minor)
+                echo "This sync crosses a minor release of \`@anvilco/types\` ($OLD_VERSION to $NEW_VERSION): the API gained types, fields or values. The next release here is at least a minor."
+                ;;
+              *)
+                echo "This sync is a patch release of \`@anvilco/types\` ($OLD_VERSION to $NEW_VERSION): only descriptions changed."
+                ;;
+            esac
+            echo
+            echo
+            echo "**After merging:** release from [package-ops](https://github.com/anvilco/package-ops/actions/workflows/release.yml), picking \`$GITHUB_REPOSITORY\` and increment \`$INCREMENT\` (higher if other unreleased changes call for it). Nothing publishes on merge."
+            echo "A later deploy that changes these files again rebuilds this branch from \`master\`, replacing any edits made here."
+          } > "$RUNNER_TEMP/pr-body.md"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add -A -- $SPEC_PATHS "$TYPES_DIR" CHANGELOG.md
+          git commit -m "Sync the generated API types from production"
+          git push --force origin "$BRANCH"
+
+          TITLE="Sync the generated API types from production"
+          if [ "$TYPES_BUMP" = major ]; then
+            TITLE="$TITLE (breaking API changes)"
+          fi
+          if [ -n "$PR" ]; then
+            gh pr edit "$PR" --title "$TITLE" --body-file "$RUNNER_TEMP/pr-body.md"
+          else
+            gh pr create \
+              --title "$TITLE" \
+              --body-file "$RUNNER_TEMP/pr-body.md" \
+              --base master \
+              --head "$BRANCH"
+            PR=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+          fi
+
+          # A breaking sync can't merge as routine: flag it and ask for review.
+          if [ "$TYPES_BUMP" = major ]; then
+            gh label create breaking --color B60205 --description "Removes or changes part of the public API" --force >/dev/null 2>&1 || true
+            gh pr edit "$PR" --add-label breaking || echo "::warning::Could not label PR #$PR as breaking"
+            if [ -n "$REVIEWERS" ]; then
+              gh pr edit "$PR" --add-reviewer "$(printf '%s' "$REVIEWERS" | tr -d ' ')" || echo "::warning::Could not request review of PR #$PR from $REVIEWERS"
+            fi
+          fi
+
+      # Production moved back to match master (e.g. a rollback before the PR
+      # merged), so an open sync PR is now wrong.
+      - name: Close stale PR
+        if: steps.changes.outputs.changed == 'false' && steps.generate.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+        run: |
+          PR=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$PR" ]; then
+            gh pr close "$PR" --delete-branch --comment "Production now matches master, so this sync is no longer needed."
+          fi
+
+      - name: Fail if the generator failed
+        if: steps.generate.outcome != 'success'
+        run: |
+          echo "::error::Fetching the specs or generating the types failed. See the step above."
+          exit 1

@@ -1,0 +1,14 @@
+{
+  "name": "ruby-anvil-dev",
+  "private": true,
+  "description": "Development scripts for ruby-anvil. Not published.",
+  "type": "module",
+  "scripts": {
+    "generate": "node generate-types.mjs",
+    "check:generated": "node generate-types.mjs && git diff --exit-code --stat -- ../lib/anvil/types/generated"
+  },
+  "dependencies": {
+    "@anvilco/types": "1.1.0",
+    "graphql": "^17.0.2"
+  }
+}

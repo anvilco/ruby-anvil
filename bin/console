@@ -2,14 +2,17 @@
 # frozen_string_literal: true
 
 require "bundler/setup"
-require "ruby/anvil"
+require "anvil"
 
-# You can add fixtures and/or initialization code here to make experimenting
-# with your gem easier. You can also use a different console, if you like.
-
-# (If you use this, don't forget to add pry to your Gemfile!)
-# require "pry"
-# Pry.start
+# An Anvil client is waiting as `anvil` when ANVIL_API_KEY is set. Point it at
+# another environment with ANVIL_BASE_URL.
+if ENV["ANVIL_API_KEY"]
+  anvil = Anvil::Client.new(
+    api_key: ENV.fetch("ANVIL_API_KEY"),
+    base_url: ENV.fetch("ANVIL_BASE_URL", Anvil::Client::DEFAULT_BASE_URL)
+  )
+  puts "`anvil` is an Anvil::Client for #{anvil.base_url}"
+end
 
 require "irb"
 IRB.start(__FILE__)
