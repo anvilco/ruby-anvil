@@ -788,12 +788,14 @@ and the notes next to it say what is specific to this repo.
 | RubyGems          | A trusted publisher on the `ruby-anvil` gem naming `anvilco/package-ops`, workflow `release.yml`, environment `release`   |
 | package-ops       | `RELEASE_APPROVERS` includes whoever runs it                                                                             |
 
-RubyGems wants a gem to exist before it will take a trusted publisher, so the
-0.1.0 push is a manual `gem push` from a maintainer's machine; every release
-after it goes through package-ops. The RubyGems account should be registered to
-services@useanvil.com and recorded in 1Password, as the npm, PyPI and NuGet
-accounts are. The gemspec sets `rubygems_mfa_required`, so that account needs
-MFA enabled.
+RubyGems takes a trusted publisher for a gem that does not exist yet, as a
+pending publisher under the account's profile, so 0.1.0 goes out through
+package-ops like every release after it. A pending publisher expires 12 hours
+after it is created, and the account that creates it becomes the gem's owner, so
+create it from the account registered to services@useanvil.com shortly before
+the first release. That account is recorded in 1Password, as the npm, PyPI and
+NuGet accounts are. The gemspec sets `rubygems_mfa_required`, so it needs MFA
+enabled.
 
 ## License
 
