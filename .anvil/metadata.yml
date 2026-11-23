@@ -1,6 +1,3 @@
-# Not live on the marketing site until the gem is on RubyGems: a public repo
-# counts as live on its own, so remove this line once 0.1.0 is published.
-supported: false
 packageManagerInstall:
   - gem install ruby-anvil
   - bundle add ruby-anvil
