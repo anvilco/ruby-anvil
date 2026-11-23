@@ -121,6 +121,18 @@ module Anvil
         raw[key.to_s].nil? ? raw[key.to_sym] : raw[key.to_s]
       end
 
+      # Reaches into a field, including fields this class does not declare.
+      #
+      #   packet.dig("documentGroup", "signers", 0, "eid")
+      #
+      # @param key [String, Symbol]
+      # @param rest [Array<String, Symbol, Integer>]
+      # @return [Object, nil]
+      def dig(key, *rest)
+        value = self[key]
+        rest.empty? ? value : value&.dig(*rest)
+      end
+
       # @return [Hash] the object as the API returned it
       def to_h
         raw

@@ -80,5 +80,17 @@ module Anvil
     def [](name)
       data[name.to_s]
     end
+
+    # Reaches into the operation's result.
+    #
+    #   response.dig("createEtchPacket", "documentGroup", "eid")
+    #
+    # @param name [String, Symbol] the operation's name in the response
+    # @param rest [Array<String, Symbol, Integer>] the path within its result
+    # @return [Object, nil]
+    def dig(name, *rest)
+      value = self[name]
+      rest.empty? ? value : value&.dig(*rest)
+    end
   end
 end

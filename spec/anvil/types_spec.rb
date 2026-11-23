@@ -136,6 +136,14 @@ RSpec.describe "Anvil typed payloads and responses" do
       expect(Anvil::Types::EtchPacket.from_h("eid" => "abc").signers).to eq([])
     end
 
+    it "digs into a field, including ones it does not declare" do
+      expect(packet.dig("documentGroup", "signers", 1, "eid")).to eq("signer2")
+      expect(packet.dig(:documentGroup, "eid")).to eq("dg123")
+      one_key = ["aFieldThisClientHasNeverHeardOf"]
+      expect(packet.dig(*one_key)).to eq(42)
+      expect(packet.dig("nope", "deeper")).to be_nil
+    end
+
     it "keeps fields this client does not know about" do
       expect(packet["aFieldThisClientHasNeverHeardOf"]).to eq(42)
       expect(packet[:aFieldThisClientHasNeverHeardOf]).to eq(42)
@@ -180,6 +188,19 @@ RSpec.describe "Anvil typed payloads and responses" do
 
       expect(response["etchPacket"]).to eq({ "eid" => "abc" })
       expect(response[:etchPacket]).to eq({ "eid" => "abc" })
+    end
+
+    it "digs into an operation's result, through hashes and arrays" do
+      response = described_class.new(
+        status_code: 200,
+        body: { "data" => { "etchPacket" => { "eid" => "abc", "signers" => [{ "eid" => "s1" }] } } }
+      )
+
+      expect(response.dig("etchPacket", "eid")).to eq("abc")
+      expect(response.dig(:etchPacket, "signers", 0, "eid")).to eq("s1")
+      one_key = ["etchPacket"]
+      expect(response.dig(*one_key)).to eq(response["etchPacket"])
+      expect(response.dig("nope", "deeper")).to be_nil
     end
 
     it "has an empty data map when the body carried none" do
