@@ -34,6 +34,8 @@ The first release: the Anvil API in Ruby, with the same coverage as the
 - `:string`, `:io`, `:stream` and `:json` response types, so a large PDF or zip
   never has to be held in memory whole.
 - `get_current_user`, reading whoever the credentials belong to.
+- `dig` on GraphQL responses and on response types, alongside `[]`, so a nested
+  value can be read in one call without checking each level for nil.
 - An `ANVIL_API_KEY` environment variable fallback, so a client built with no
   arguments works.
 - Retries for the responses the API could not give: 500, 502, 503 and 504, and

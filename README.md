@@ -424,8 +424,9 @@ response = client.request_graphql(
   variables: { eid: "nxflNZqxDUbltLUbYWK" }
 )
 
-response["weldData"]["isComplete"]  # the result of one operation
-response.data                       # the whole GraphQL data map
+response["weldData"]["isComplete"]   # the result of one operation
+response.dig("weldData", "isComplete") # the same, without checking each level
+response.data                        # the whole GraphQL data map
 response.status_code
 ```
 
@@ -682,6 +683,7 @@ packet.details_url                 # a declared field
 packet.created_at                  # timestamps are parsed into Time
 packet.document_group.signers      # nested objects are typed too
 packet["someFieldAddedYesterday"]  # anything else, by its API name
+packet.dig("documentGroup", "signers", 0, "eid")  # down a path, nils and all
 packet.to_h                        # the response exactly as it arrived
 ```
 
@@ -693,7 +695,7 @@ are generated and kept in step with production.
 
 A custom `response_query` works with this: fields you did not select read as
 `nil`, and fields the type does not declare are still in `to_h` and reachable
-with `[]`.
+with `[]` or `dig`.
 
 ## Development
 

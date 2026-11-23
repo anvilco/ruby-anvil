@@ -1,7 +1,10 @@
 # Generate a PDF from HTML and CSS. Nothing needs setting up in the dashboard.
 # Docs: https://www.useanvil.com/docs/api/generate-pdf#html--css-to-pdf
 #
-#   ANVIL_API_KEY=yourKey ruby generate_html.rb
+#   ANVIL_API_KEY=yourKey bundle exec ruby examples/generate_html.rb
+#
+# From a clone, run it from the repository root as above. With the gem
+# installed, plain `ruby generate_html.rb` works too.
 
 require "anvil"
 

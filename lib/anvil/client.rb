@@ -538,9 +538,10 @@ module Anvil
       request
     end
 
+    # An empty payload still goes as `{}`: a request with no content type is
+    # refused for that rather than for the field the caller left out.
     def apply_body(request, body)
       return if body.nil?
-      return if body.respond_to?(:empty?) && body.empty? && !body.is_a?(String)
 
       if body.is_a?(String)
         request.body = body
