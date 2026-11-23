@@ -1,7 +1,10 @@
 # Fill a PDF template with JSON data and write the result.
 # Docs: https://www.useanvil.com/docs/api/fill-pdf
 #
-#   ANVIL_API_KEY=yourKey ruby fill.rb
+#   ANVIL_API_KEY=yourKey bundle exec ruby examples/fill.rb
+#
+# From a clone, run it from the repository root as above. With the gem
+# installed, `ruby fill.rb` works anywhere.
 
 require "anvil"
 
