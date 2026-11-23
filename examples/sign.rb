@@ -4,7 +4,7 @@
 #   ANVIL_API_KEY=yourKey bundle exec ruby examples/sign.rb your.real.email@example.com
 #
 # From a clone, run it from the repository root as above. With the gem
-# installed, `ruby sign.rb your.real.email@example.com` works anywhere.
+# installed, plain `ruby sign.rb your.real.email@example.com` works too.
 #
 # A signature request email goes to the address you pass, so use a real one.
 

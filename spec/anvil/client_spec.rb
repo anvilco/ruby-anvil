@@ -117,8 +117,6 @@ RSpec.describe Anvil::Client do
       stub = stub_request(:post, "https://app.useanvil.com/api/v1/anything")
         .with(body: '{"a":1}', headers: { "Content-Type" => "application/json" })
         .to_return(status: 200, body: "ok", headers: api_headers)
-      # Sent as {}, not omitted: a request with no content type is refused for that
-      # rather than for the field the caller actually left out
       empty = stub_request(:post, "https://app.useanvil.com/api/v1/empty")
         .with(body: "{}", headers: { "Content-Type" => "application/json" })
         .to_return(status: 200, body: "ok", headers: api_headers)

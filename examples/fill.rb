@@ -4,7 +4,7 @@
 #   ANVIL_API_KEY=yourKey bundle exec ruby examples/fill.rb
 #
 # From a clone, run it from the repository root as above. With the gem
-# installed, `ruby fill.rb` works anywhere.
+# installed, plain `ruby fill.rb` works too.
 
 require "anvil"
 
