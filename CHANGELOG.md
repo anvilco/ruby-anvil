@@ -10,6 +10,8 @@ as they land.
 
 ## [Unreleased]
 
+## [v0.1.0] - 2026-11-23
+
 The first release: the Anvil API in Ruby, with the same coverage as the
 [Node client](https://github.com/anvilco/node-anvil).
 
@@ -61,3 +63,4 @@ few behaviors match python-anvil and dotnet-anvil rather than node-anvil:
   `Retry-After` it named capped at a minute.
 - A 2xx whose body carries only a `name` or a `message` is not an error.
   node-anvil treats it as one; that is a known divergence.
+
