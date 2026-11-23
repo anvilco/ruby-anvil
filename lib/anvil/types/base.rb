@@ -121,7 +121,7 @@ module Anvil
         raw[key.to_s].nil? ? raw[key.to_sym] : raw[key.to_s]
       end
 
-      # Reaches into a field, including fields this class does not declare.
+      # Reaches into a field the way {#[]} does, and on down the path.
       #
       #   packet.dig("documentGroup", "signers", 0, "eid")
       #

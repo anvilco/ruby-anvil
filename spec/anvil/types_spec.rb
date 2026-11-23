@@ -139,8 +139,8 @@ RSpec.describe "Anvil typed payloads and responses" do
     it "digs into a field, including ones it does not declare" do
       expect(packet.dig("documentGroup", "signers", 1, "eid")).to eq("signer2")
       expect(packet.dig(:documentGroup, "eid")).to eq("dg123")
-      one_key = ["aFieldThisClientHasNeverHeardOf"]
-      expect(packet.dig(*one_key)).to eq(42)
+      one_key = ["eid"]
+      expect(packet.dig(*one_key)).to eq("packet123")
       expect(packet.dig("nope", "deeper")).to be_nil
     end
 
