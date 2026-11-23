@@ -113,14 +113,21 @@ RSpec.describe Anvil::Client do
   describe "#request_rest" do
     let(:client) { build_client }
 
-    it "sends a Hash body as JSON" do
+    it "sends a Hash body as JSON, an empty one included" do
       stub = stub_request(:post, "https://app.useanvil.com/api/v1/anything")
         .with(body: '{"a":1}', headers: { "Content-Type" => "application/json" })
         .to_return(status: 200, body: "ok", headers: api_headers)
+      # Sent as {}, not omitted: a request with no content type is refused for that
+      # rather than for the field the caller actually left out
+      empty = stub_request(:post, "https://app.useanvil.com/api/v1/empty")
+        .with(body: "{}", headers: { "Content-Type" => "application/json" })
+        .to_return(status: 200, body: "ok", headers: api_headers)
 
       client.request_rest("/api/v1/anything", method: :post, body: { a: 1 })
+      client.request_rest("/api/v1/empty", method: :post, body: {})
 
       expect(stub).to have_been_requested
+      expect(empty).to have_been_requested
     end
 
     it "sends a String body untouched" do

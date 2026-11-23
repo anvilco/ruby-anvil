@@ -538,9 +538,11 @@ module Anvil
       request
     end
 
+    # An empty payload is still sent, as `{}` with the JSON content type. Sending
+    # nothing at all leaves the request with no content type, which the API
+    # refuses with a message about content types rather than the missing field.
     def apply_body(request, body)
       return if body.nil?
-      return if body.respond_to?(:empty?) && body.empty? && !body.is_a?(String)
 
       if body.is_a?(String)
         request.body = body
