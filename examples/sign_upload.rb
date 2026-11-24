@@ -19,13 +19,16 @@ end
 
 client = Anvil::Client.new(api_key: ENV.fetch("ANVIL_API_KEY"))
 
-# Streamed to the API rather than read into memory. Pass `filename:` and
-# `mimetype:` for an IO with no path of its own
+# Wraps the file for upload. It also takes an IO or a StringIO; pass
+# `filename:` and `mimetype:` when they can't be worked out from the input.
+# The file is streamed to the API rather than read into memory
 upload = Anvil.prepare_graphql_file(pdf_path)
 
 packet = client.create_etch_packet(
   variables: Anvil::Payloads::CreateEtchPacket.new(
     name: "Uploaded PDF - Testy Signer",
+    # The packet is ready to send: an email goes to the signer. Use
+    # is_draft: true to review it in the dashboard first
     is_draft: false,
     # Test packets use development signatures and are not billed
     is_test: true,
@@ -38,8 +41,9 @@ packet = client.create_etch_packet(
         title: "Please sign this document",
         file: upload,
 
-        # Where the signer signs, in points from the top left of the page.
-        # Set up a PDF template in the dashboard to place fields visually
+        # Where each field sits on the uploaded PDF, in points from the
+        # top-left of the page. Set up a template in the dashboard instead
+        # to place fields visually
         fields: [
           { id: "signature1", type: "signature", pageNum: 0,
             rect: { x: 400, y: 100, width: 150, height: 30 } },
