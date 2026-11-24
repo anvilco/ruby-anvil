@@ -3,6 +3,10 @@
 [![Gem Version](https://img.shields.io/gem/v/ruby-anvil.svg)](https://rubygems.org/gems/ruby-anvil)
 [![CI](https://github.com/anvilco/ruby-anvil/actions/workflows/ci.yml/badge.svg)](https://github.com/anvilco/ruby-anvil/actions/workflows/ci.yml)
 
+> [!IMPORTANT]
+> **Anvil's official Ruby client.** The existing open source `anvil-ruby` gem is
+> unofficial and not supported by Anvil.
+
 [Anvil](https://www.useanvil.com/developers) is a suite of APIs for paperwork:
 
 - [PDF filling](https://www.useanvil.com/docs/api/fill-pdf): fill a PDF template with JSON data
