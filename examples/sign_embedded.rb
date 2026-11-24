@@ -21,7 +21,7 @@ abort "Pass your email address as the first argument" if signer_email.nil? || si
 
 client = Anvil::Client.new(api_key: ENV.fetch("ANVIL_API_KEY"))
 
-# 1. Create the packet, with a signer who will sign in your app
+# 1. The signer signs inside your app rather than from an emailed link
 packet = client.create_etch_packet(
   variables: Anvil::Payloads::CreateEtchPacket.new(
     name: "Embedded signing - Testy Signer",
@@ -51,7 +51,7 @@ packet = client.create_etch_packet(
 
 puts "Created packet #{packet.eid}"
 
-# 2. Get the URL for the signer. Show it in an iframe, or redirect to it
+# 2. Show this URL in an iframe, or redirect the signer to it
 sign_url = client.generate_etch_sign_url(
   signer_eid: packet.signers.first.eid,
   # Your own id for the person signing
@@ -60,13 +60,13 @@ sign_url = client.generate_etch_sign_url(
 
 puts "Send the signer to: #{sign_url}"
 
-# 3. Check on the packet, once your app is told signing is done. A webhook can
-# tell you instead: https://www.useanvil.com/docs/api/webhooks
+# 3. Check in once your app is told signing is done. A webhook can tell you
+# instead: https://www.useanvil.com/docs/api/webhooks
 status = client.get_etch_packet(eid: packet.eid)
 puts "Packet status: #{status.status}, signers remaining: #{status.number_remaining_signers}"
 
-# 4. Download the documents as a zip. Once everyone has signed, these are the
-# signed versions. Streamed to the file rather than held in memory
+# 4. Once everyone has signed, these are the signed versions. Streamed to the
+# file rather than held in memory
 File.open("documents.zip", "wb") do |file|
   client.download_documents(packet.document_group.eid, data_type: :stream, to: file)
 end

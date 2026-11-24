@@ -19,8 +19,8 @@ end
 
 client = Anvil::Client.new(api_key: ENV.fetch("ANVIL_API_KEY"))
 
-# Wraps the file for upload and streams it to the API rather than reading it
-# into memory. Pass `filename:` and `mimetype:` for an IO with no path of its own
+# Streamed to the API rather than read into memory. Pass `filename:` and
+# `mimetype:` for an IO with no path of its own
 upload = Anvil.prepare_graphql_file(pdf_path)
 
 packet = client.create_etch_packet(
