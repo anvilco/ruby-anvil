@@ -9,8 +9,8 @@ Gem::Specification.new do |spec|
   spec.email = ["support@useanvil.com"]
 
   spec.summary = "Anvil API client for Ruby"
-  spec.description = "Fill PDFs, generate PDFs from HTML or markdown, send documents for e-signature, " \
-                     "and run Workflows with the Anvil API."
+  spec.description = "Anvil's official Ruby client. Fill PDFs, generate PDFs from HTML or markdown, " \
+                     "send documents for e-signature, and run Workflows with the Anvil API."
   spec.homepage = "https://github.com/anvilco/ruby-anvil"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1.0"
