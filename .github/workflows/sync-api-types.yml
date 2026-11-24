@@ -42,7 +42,7 @@ jobs:
       # Always the default branch, so a manual run from another branch can't
       # put that branch's commits in the PR. No persisted credentials:
       # CI_GITHUB_TOKEN is only handed to git and gh in the steps that push.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: master
           persist-credentials: false
