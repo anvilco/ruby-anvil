@@ -10,6 +10,14 @@ as they land.
 
 ## [Unreleased]
 
+### Changed
+
+- The gem's description names it as Anvil's official Ruby client. RubyGems shows
+  this rather than the README, so it is what someone comparing clients reads
+  before installing.
+- The README says the same, and names the unrelated community `anvil-ruby` gem as
+  unofficial and unsupported. The two names are easy to confuse.
+
 ## [v0.1.0] - 2026-11-23
 
 The first release: the Anvil API in Ruby, with the same coverage as the
