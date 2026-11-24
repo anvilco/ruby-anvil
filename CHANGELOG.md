@@ -18,6 +18,13 @@ as they land.
 - The README says the same, and names the unrelated community `anvil-ruby` gem as
   unofficial and unsupported. The two names are easy to confuse.
 
+### Fixed
+
+- The README's upload example and `EtchFile`'s own documentation placed their
+  signature field with `pageNum: 1`. The API numbers pages from 0, so copying
+  either put the signature on the second page, or failed outright on a one-page
+  PDF. The `examples/` files were already correct.
+
 ## [v0.1.0] - 2026-11-23
 
 The first release: the Anvil API in Ruby, with the same coverage as the

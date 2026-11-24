@@ -514,7 +514,7 @@ packet = client.create_etch_packet(variables: {
     fields: [{
       id: "signature",
       type: "signature",
-      pageNum: 1,
+      pageNum: 0,
       rect: { x: 100, y: 100, width: 200, height: 40 }
     }]
   }],
