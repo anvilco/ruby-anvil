@@ -12,7 +12,7 @@ module Anvil
     #     id: "contract",
     #     title: "Contract",
     #     file: Anvil.prepare_graphql_file("./contract.pdf"),
-    #     fields: [{ id: "signature", type: "signature", pageNum: 1, rect: { ... } }]
+    #     fields: [{ id: "signature", type: "signature", pageNum: 0, rect: { ... } }]
     #   )
     class EtchFile
       # Reopened to carry the documentation above

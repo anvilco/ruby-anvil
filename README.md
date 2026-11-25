@@ -514,7 +514,7 @@ packet = client.create_etch_packet(variables: {
     fields: [{
       id: "signature",
       type: "signature",
-      pageNum: 1,
+      pageNum: 0,
       rect: { x: 100, y: 100, width: 200, height: 40 }
     }]
   }],
@@ -522,6 +522,8 @@ packet = client.create_etch_packet(variables: {
               fields: [{ fileId: "nda", fieldId: "signature" }] }]
 })
 ```
+
+`pageNum` counts from 0, so a field on the first page is `pageNum: 0`.
 
 The client sends it over the
 [GraphQL multipart request spec](https://github.com/jaydenseric/graphql-multipart-request-spec),
