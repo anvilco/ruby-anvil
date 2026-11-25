@@ -24,7 +24,8 @@ as they land.
   signature field with `pageNum: 1`. The API numbers pages from 0, so copying
   either put the signature a page later than intended. On a one-page PDF the API
   accepts it without complaint, so there is nothing to notice. The `examples/`
-  files were already correct.
+  files were already correct, and the README now states the convention rather
+  than only demonstrating it.
 
 ## [v0.1.0] - 2026-11-23
 

@@ -523,6 +523,8 @@ packet = client.create_etch_packet(variables: {
 })
 ```
 
+`pageNum` counts from 0, so a field on the first page is `pageNum: 0`.
+
 The client sends it over the
 [GraphQL multipart request spec](https://github.com/jaydenseric/graphql-multipart-request-spec),
 assembling the body in a tempfile so a large PDF is never held in memory whole.
