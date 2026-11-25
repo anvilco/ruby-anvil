@@ -22,8 +22,9 @@ as they land.
 
 - The README's upload example and `EtchFile`'s own documentation placed their
   signature field with `pageNum: 1`. The API numbers pages from 0, so copying
-  either put the signature on the second page, or failed outright on a one-page
-  PDF. The `examples/` files were already correct.
+  either put the signature a page later than intended. On a one-page PDF the API
+  accepts it without complaint, so there is nothing to notice. The `examples/`
+  files were already correct.
 
 ## [v0.1.0] - 2026-11-23
 
